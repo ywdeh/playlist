@@ -2,22 +2,22 @@
 	import { onMount } from 'svelte';
 	import { fade } from 'svelte/transition';
 	import Cover from './cover.svelte';
-	import type { LfmScrobble } from '#lib/lastfm';
+	import type { Song } from '#lib/music';
 	import { player } from '#lib/player.svelte';
 	import { cover_url, tint_on_hover } from '#lib/hover_tint.svelte';
 	import { song_menu } from '#lib/menu.svelte';
 
-	let { user, initial }: { user: string; initial: LfmScrobble | null } = $props();
+	let { initial }: { initial: Song | null } = $props();
 
-	let latest = $state<LfmScrobble | null | undefined>(undefined);
+	let latest = $state<Song | null | undefined>(undefined);
 	const shown = $derived(latest === undefined ? initial : latest);
-	const track = $derived(shown?.now_playing ? shown : null);
+	const track = $derived(shown ?? null);
 
 	onMount(() => {
 		const tick = async () => {
 			if (document.hidden) return;
 			try {
-				const res = await fetch(`/api/now/${encodeURIComponent(user)}`);
+				const res = await fetch('/api/now');
 				if (res.ok) latest = await res.json();
 			} catch {}
 		};
@@ -35,19 +35,20 @@
 		{#key track.artist + track.name}
 			<button
 				class="now press"
-				onclick={() => player.play([{ name: track.name, artist: track.artist, image: track.image }], 0)}
+				onclick={() => player.play([track], 0)}
 				{@attach tint_on_hover(() => cover_url(track.image, track.artist, track.name))}
 				{@attach song_menu(() => ({
 					name: track.name,
 					artist: track.artist,
-					play: () => player.play([{ name: track.name, artist: track.artist, image: track.image }], 0)
+					spotify: track.spotify,
+					play: () => player.play([track], 0)
 				}))}
 			>
 				<Cover src={track.image} artist={track.artist} name={track.name} />
 				<div class="text">
 					<span class="label"><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>Playing now</span>
 					<strong class="title">{track.name}</strong>
-					<span class="artist ellipsis">{track.artist}</span>
+					<span class="artist ellipsis">{track.credits ?? track.artist}</span>
 				</div>
 			</button>
 		{/key}

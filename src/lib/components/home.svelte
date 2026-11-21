@@ -4,21 +4,21 @@
 	import Row from './row.svelte';
 	import Shelf from './shelf.svelte';
 	import NowPlaying from './now_playing.svelte';
-	import { LFM_PERIODS, LFM_PERIOD_LABELS, type LfmArtist, type LfmPeriod, type LfmTrack, type LiveData, type Playlist } from '#lib/lastfm';
+	import { PERIODS, PERIOD_LABELS, type LiveData, type Period, type Playlist, type Top } from '#lib/music';
 	import { player } from '#lib/player.svelte';
+	import { playable } from '#lib/playable.svelte';
 	import { cover_url, tint_on_hover } from '#lib/hover_tint.svelte';
 	import { link } from '#lib/link';
-	import { artist_menu, song_menu } from '#lib/menu.svelte';
+	import { artist_menu, artist_path, song_menu } from '#lib/menu.svelte';
 	import { reveal } from '#lib/reveal';
 	import { ago, length } from '#lib/format';
 
 	let {
 		data,
 		title,
-		base = '',
 		intro = [],
 		playlist = null
-	}: { data: LiveData; title: string; base?: string; intro?: string[]; playlist?: Playlist | null } = $props();
+	}: { data: LiveData; title: string; intro?: string[]; playlist?: Playlist | null } = $props();
 
 	const pinned = $derived(playlist?.songs ?? []);
 	const song_key = (s: { artist: string; name: string }) => `${s.artist}\u0000${s.name}`.toLowerCase();
@@ -30,22 +30,17 @@
 		return () => clearInterval(id);
 	});
 
-	const since = (iso: string) =>
-		new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
-
 	let show_all = $state(false);
-	const now_item = $derived(data.recent[0]?.now_playing ? data.recent[0] : null);
-	const recent = $derived(data.recent.filter((r) => !r.now_playing).slice(0, 15));
+	const recent = $derived(data.recent.slice(0, 15));
 
-	type Top = { user: string; period: LfmPeriod; tracks: LfmTrack[]; artists: LfmArtist[] };
 	let picked = $state<Top | null>(null);
-	let pending = $state<LfmPeriod | null>(null);
-	const top = $derived<Top>(picked && picked.user === data.user ? picked : data);
+	let pending = $state<Period | null>(null);
+	const top = $derived<Top>(picked ?? data);
 	const ranked = $derived(top.tracks.filter((t) => !pinned_keys.has(song_key(t))));
 	const songs = $derived(show_all ? ranked : ranked.slice(0, 10));
 	const queue = $derived([...pinned, ...ranked]);
 	const shown = $derived(pending ?? top.period);
-	const loaded = new Map<string, Top>();
+	const loaded = new Map<Period, Top>();
 	let request = 0;
 
 	async function toggle_all(e: MouseEvent) {
@@ -57,18 +52,17 @@
 		window.scrollBy({ top: button.getBoundingClientRect().top - before, behavior: 'instant' });
 	}
 
-	async function pick(p: LfmPeriod) {
+	async function pick(p: Period) {
 		if (p === shown) return;
 		const id = ++request;
-		const key = `${data.user}:${p}`;
 		pending = p;
 		try {
-			let next = loaded.get(key);
+			let next = loaded.get(p);
 			if (!next) {
-				const res = await fetch(`/api/top/${encodeURIComponent(data.user)}?period=${p}`);
+				const res = await fetch(`/api/top?period=${p}`);
 				if (!res.ok) throw new Error();
 				next = (await res.json()) as Top;
-				loaded.set(key, next);
+				loaded.set(p, next);
 			}
 			if (id !== request) return;
 			show_all = false;
@@ -86,10 +80,7 @@
 		<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 11v5.5M12 7.6v.1" /></svg>
 		<span class="tip end wide below" role="tooltip" id="about_page">
 			<strong>Updated {ago(data.updated, now)}</strong>
-			{#if data.since}<span>Counting plays since {since(data.since)}</span>{/if}
-			<span>Plays from Last.fm,{#if playlist}&nbsp;favourites from Spotify,{/if} covers and details from Deezer.</span>
-			<span>If something looks off, they're likely still catching up.</span>
-		</span>
+			<span>Straight from my Spotify, with previews from Deezer and iTunes.</span>		</span>
 	</button>
 </div>
 
@@ -99,11 +90,11 @@
 	</p>
 {/if}
 
-<div class="cascade" style:--i={1}><NowPlaying user={data.user} initial={now_item} /></div>
+<div class="cascade" style:--i={1}><NowPlaying initial={data.now} /></div>
 
 <nav class="periods cascade" style:--i={2} aria-label="Time range">
-	{#each LFM_PERIODS as p (p)}
-		<button class="press" aria-pressed={shown === p} onclick={() => pick(p)}>{LFM_PERIOD_LABELS[p]}</button>
+	{#each PERIODS as p (p)}
+		<button class="press" aria-pressed={shown === p} onclick={() => pick(p)}>{PERIOD_LABELS[p]}</button>
 	{/each}
 </nav>
 
@@ -114,12 +105,7 @@
 			<ol class="list">
 				{#each pinned as s, i (s.spotify)}
 					<Row
-						name={s.name}
-						artist={s.artist}
-						image={s.image}
-						album={s.album}
-						duration={s.duration}
-						spotify={s.spotify}
+						song={s}
 						pinned
 						order={4 + i}
 						onplay={() => player.play(queue, i)}
@@ -127,11 +113,7 @@
 				{/each}
 				{#each songs as t, i (t.artist + t.name)}
 					<Row
-						name={t.name}
-						artist={t.artist}
-						image={t.image}
-						album={t.album}
-						duration={t.duration}
+						song={t}
 						rank={i + 1}
 						order={4 + shift + (i % 10)}
 						onplay={() => player.play(queue, pinned.length + i)}
@@ -153,11 +135,11 @@
 					class="item artist press"
 					role="link"
 					tabindex="0"
-					{@attach link(() => `${base}/artist/${encodeURIComponent(a.name)}`)}
-					{@attach tint_on_hover(() => cover_url(null, a.name))}
-					{@attach artist_menu(() => a.name)}
+					{@attach link(() => artist_path(a.name))}
+					{@attach tint_on_hover(() => a.image ?? cover_url(null, a.name))}
+					{@attach artist_menu(() => ({ artist: a.name, spotify: a.spotify }))}
 				>
-					<Cover src={null} artist={a.name} round />
+					<Cover src={a.image} artist={a.name} round />
 					<span class="label ellipsis">{a.name}</span>
 				</div>
 			{/each}
@@ -168,14 +150,19 @@
 {#if data.fresh.length}
 	<Shelf title="New" order={16 + shift}>
 		{#each data.fresh as s, i (s.artist + s.name)}
-			<button class="item tile press" class:active={player.is_current(s)} onclick={() => player.play(data.fresh, i)}
+			<button
+					class="item tile press"
+					class:active={player.is_current(s)}
+					class:muted={playable.state(s) === 'no'}
+					onclick={() => playable.state(s) !== 'no' && player.play(data.fresh, i)}
+					{@attach playable.watch(() => s)}
 					{@attach tint_on_hover(() => cover_url(s.image, s.artist, s.name))}
-					{@attach song_menu(() => ({ name: s.name, artist: s.artist, play: () => player.play(data.fresh, i) }))}
+					{@attach song_menu(() => ({ name: s.name, artist: s.artist, spotify: s.spotify, play: () => player.play(data.fresh, i) }))}
 				>
 				<Cover src={s.image} artist={s.artist} name={s.name} />
 				<span class="label ellipsis">{s.name}</span>
 				<span class="sub">
-					<span class="ellipsis">{s.artist}</span>
+					<span class="ellipsis">{s.credits ?? s.artist}</span>
 					{#if s.duration}<span class="length">{length(s.duration)}</span>{/if}
 				</span>
 			</button>
@@ -189,13 +176,9 @@
 		<ul class="list">
 			{#each recent as r, i (r.at + r.name)}
 				<Row
-					name={r.name}
-					artist={r.artist}
-					image={r.image}
-					album={r.album}
-					duration={r.duration}
+					song={r}
 					order={18 + shift + i}
-					meta={r.at ? ago(r.at) : undefined}
+					meta={ago(r.at)}
 					onplay={() => player.play(recent, i)}
 				/>
 			{/each}
@@ -351,6 +334,12 @@
 		font-weight: 600;
 		font-size: 1.04em;
 		line-height: 26px;
+	}
+	.tile > * {
+		transition: opacity 0.4s var(--ease);
+	}
+	.tile.muted > * {
+		opacity: 0.4;
 	}
 	.tile.active .label {
 		color: var(--accent);

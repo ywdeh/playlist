@@ -1,8 +1,12 @@
 import { error, json } from '@sveltejs/kit';
 import { find_spotify } from '#lib/server/previews';
-import { songs_by } from '#lib/server/lastfm';
-import { LASTFM_USER } from '#lib/site';
+import { artist_link, owner_song, songs_by } from '#lib/server/spotify';
 import type { RequestHandler } from './$types';
+
+async function find(artist: string, name?: string) {
+	if (name) return (await owner_song(name, artist))?.spotify ?? (await find_spotify(artist, name));
+	return (await artist_link(artist)) ?? (await find_spotify(artist, undefined, await songs_by(artist)));
+}
 
 export const GET: RequestHandler = async ({ url, setHeaders }) => {
 	const artist = url.searchParams.get('artist')?.slice(0, 200);
@@ -11,7 +15,7 @@ export const GET: RequestHandler = async ({ url, setHeaders }) => {
 	let link: string | null = null;
 	let failed = false;
 	try {
-		link = await find_spotify(artist, name, name ? [] : await songs_by(LASTFM_USER, artist));
+		link = await find(artist, name);
 	} catch {
 		failed = true;
 	}

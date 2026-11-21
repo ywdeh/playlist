@@ -5,7 +5,10 @@
 	import ContextMenu from '#lib/components/context_menu.svelte';
 	import Footer from '#lib/components/footer.svelte';
 
+	import { page } from '$app/state';
+
 	let { children } = $props();
+	const bare = $derived(page.route.id === '/listen');
 </script>
 
 <svelte:head>
@@ -14,11 +17,13 @@
 
 <main>
 	{@render children()}
-	<Footer />
+	{#if !bare}<Footer />{/if}
 </main>
 
-<PlayerBar />
-<ContextMenu />
+{#if !bare}
+	<PlayerBar />
+	<ContextMenu />
+{/if}
 
 <div class="grain" aria-hidden="true"></div>
 

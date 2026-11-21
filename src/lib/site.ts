@@ -11,6 +11,4 @@ export const CONTACT = {
 	site: { label: 'hedwy.art', href: 'https://hedwy.art' }
 };
 
-export const LASTFM_USER = 'Hedwy';
-
 export const FAVOURITE_PLAYLIST = '60BVv1fDX7AgWM0e3KjJen';

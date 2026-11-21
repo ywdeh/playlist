@@ -100,9 +100,8 @@ export function context_menu(build: () => { items: MenuItem[]; spotify: SpotifyI
 	};
 }
 
-const base = () => page.url.pathname.match(/^\/u\/[^/]+/)?.[0] ?? '';
-export const artist_path = (artist: string) => `${base()}/artist/${encodeURIComponent(artist)}`;
-const on_artist_page = (artist: string) => decodeURIComponent(page.url.pathname) === `${base()}/artist/${artist}`;
+export const artist_path = (artist: string) => `/artist/${encodeURIComponent(artist)}`;
+const on_artist_page = (artist: string) => decodeURIComponent(page.url.pathname) === `/artist/${artist}`;
 
 export function song_menu(song: () => { name: string; artist: string; play: () => void; spotify?: string }) {
 	return context_menu(() => {
@@ -119,11 +118,11 @@ export function song_menu(song: () => { name: string; artist: string; play: () =
 	});
 }
 
-export function artist_menu(artist: () => string) {
+export function artist_menu(target: () => { artist: string; spotify?: string }) {
 	return context_menu(() => {
-		const a = artist();
-		const items: MenuItem[] = on_artist_page(a) ? [] : [{ label: 'Open artist', run: () => goto(artist_path(a)) }];
-		return { items, spotify: [{ label: 'Open in Spotify', search_label: 'Search on Spotify', artist: a }] };
+		const { artist, spotify } = target();
+		const items: MenuItem[] = on_artist_page(artist) ? [] : [{ label: 'Open artist', run: () => goto(artist_path(artist)) }];
+		return { items, spotify: [{ label: 'Open in Spotify', search_label: 'Search on Spotify', artist, url: spotify }] };
 	});
 }
 

@@ -4,40 +4,42 @@
 	import { cover_url, tint_on_hover } from '#lib/hover_tint.svelte';
 	import { song_menu } from '#lib/menu.svelte';
 	import { length } from '#lib/format';
+	import { playable } from '#lib/playable.svelte';
+	import type { Song } from '#lib/music';
 
 	let {
-		name,
-		artist,
-		image,
-		album,
-		duration,
+		song,
 		rank,
 		pinned = false,
 		meta,
 		order = 0,
-		spotify,
 		onplay
 	}: {
-		name: string;
-		artist: string;
-		image: string | null;
-		album?: string | null;
-		duration?: number | null;
+		song: Song;
 		rank?: number;
 		pinned?: boolean;
 		meta?: string;
 		order?: number;
-		spotify?: string;
 		onplay: () => void;
 	} = $props();
 
-	const active = $derived(player.is_current({ name, artist }));
+	const { name, artist, image, album, duration } = $derived(song);
+	const active = $derived(player.is_current(song));
+	const muted = $derived(playable.state(song) === 'no');
 	const end = $derived(meta ?? (duration ? length(duration) : ''));
 </script>
 
 <li class="cascade" style:--i={order}>
-	<button class="row press" class:active onclick={onplay} {@attach tint_on_hover(() => cover_url(image, artist, name))}
-		{@attach song_menu(() => ({ name, artist, play: onplay, spotify }))}
+	<button
+		class="row press"
+		class:active
+		class:muted
+		onclick={() => !muted && onplay()}
+		aria-disabled={muted}
+		title={muted ? 'Not available to play' : undefined}
+		{@attach playable.watch(() => song)}
+		{@attach tint_on_hover(() => cover_url(image, artist, name))}
+		{@attach song_menu(() => ({ name, artist, play: onplay, spotify: song.spotify }))}
 	>
 		{#if pinned}
 			<span class="rank heart tip_anchor" aria-label="One of my favourites">
@@ -52,7 +54,7 @@
 		<Cover src={image} {artist} {name} />
 		<span class="text">
 			<span class="name ellipsis">{name}</span>
-			<span class="artist ellipsis">{artist}</span>
+			<span class="artist ellipsis">{song.credits ?? artist}</span>
 		</span>
 		<span class="album ellipsis">{album ?? ''}</span>
 		<span class="end">
@@ -84,6 +86,15 @@
 	.row :global(.art) {
 		height: 100%;
 		width: auto;
+	}
+	.row > * {
+		transition: opacity 0.4s var(--ease);
+	}
+	.muted > * {
+		opacity: 0.4;
+	}
+	.muted {
+		cursor: default;
 	}
 	.rank {
 		width: 1.4em;

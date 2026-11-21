@@ -1,18 +1,30 @@
 import { error, redirect } from '@sveltejs/kit';
-import { find_art } from '#lib/server/previews';
-import { songs_by } from '#lib/server/lastfm';
-import { LASTFM_USER } from '#lib/site';
+import { find_art, find_preview } from '#lib/server/previews';
+import { artist_image, owner_song, songs_by } from '#lib/server/spotify';
 import type { RequestHandler } from './$types';
+
+async function find(artist: string, name: string) {
+	if (name) {
+		const own = await owner_song(name, artist);
+		if (own?.image) return own.image;
+		const preview = await find_preview(name, artist).catch(() => null);
+		return preview?.cover ?? (await find_art('track', artist, name));
+	}
+	return (await artist_image(artist)) ?? (await find_art('artist', artist, '', await songs_by(artist)));
+}
 
 export const GET: RequestHandler = async ({ url, setHeaders }) => {
 	const artist = (url.searchParams.get('artist') ?? '').trim().slice(0, 200);
 	const name = (url.searchParams.get('name') ?? '').trim().slice(0, 200);
 	if (!artist) error(400, 'artist required');
 
-	const songs = name ? [] : await songs_by(LASTFM_USER, artist);
-	const src = await find_art(name ? 'track' : 'artist', artist, name, songs);
+	const src = await find(artist, name).catch(() => undefined);
+	if (src === undefined) {
+		setHeaders({ 'cache-control': 'no-store' });
+		error(503, 'try again');
+	}
 	if (!src) {
-		setHeaders({ 'cache-control': 'public, max-age=86400' });
+		setHeaders({ 'cache-control': 'public, max-age=3600' });
 		error(404, 'no image');
 	}
 	setHeaders({ 'cache-control': 'public, max-age=604800' });

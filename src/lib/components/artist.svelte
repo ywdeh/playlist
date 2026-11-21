@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Cover from './cover.svelte';
 	import Row from './row.svelte';
-	import type { ArtistData } from '#lib/lastfm';
+	import type { ArtistData } from '#lib/music';
 	import { player } from '#lib/player.svelte';
 	import { cover_url, page_tint, tint_on_hover } from '#lib/hover_tint.svelte';
 	import { link } from '#lib/link';
@@ -10,7 +10,8 @@
 
 	let { data, back, who }: { data: ArtistData; back: string; who: string } = $props();
 
-	page_tint(() => cover_url(null, data.artist));
+	const photo = $derived(data.image ?? cover_url(null, data.artist));
+	page_tint(() => photo);
 
 	const all = $derived([...data.yours, ...data.popular]);
 	const from_here = $derived(all.some((s) => player.is_current(s)));
@@ -32,10 +33,10 @@
 	<div
 		class="photo cascade"
 		style:--i={1}
-		{@attach tint_on_hover(() => cover_url(null, data.artist))}
-		{@attach artist_menu(() => data.artist)}
+		{@attach tint_on_hover(() => photo)}
+		{@attach artist_menu(() => ({ artist: data.artist, spotify: data.spotify }))}
 	>
-		<Cover src={null} artist={data.artist} round />
+		<Cover src={data.image} artist={data.artist} round />
 	</div>
 	<h1 class="cascade" style:--i={2}>{data.artist}</h1>
 	{#if all.length}
@@ -55,11 +56,7 @@
 		<ul class="list">
 			{#each data.yours as s, i (s.artist + s.name)}
 				<Row
-					name={s.name}
-					artist={s.artist}
-					image={s.image}
-					album={s.album}
-					duration={s.duration}
+					song={s}
 					order={5 + i}
 					onplay={() => player.play(all, i)}
 				/>
@@ -74,11 +71,7 @@
 		<ul class="list">
 			{#each data.popular as s, i (s.artist + s.name)}
 				<Row
-					name={s.name}
-					artist={s.artist}
-					image={s.image}
-					album={s.album}
-					duration={s.duration}
+					song={s}
 					order={7 + data.yours.length + i}
 					onplay={() => player.play(all, data.yours.length + i)}
 				/>

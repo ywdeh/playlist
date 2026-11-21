@@ -9,6 +9,7 @@
 	import { link } from '#lib/link';
 	import { artist_path, song_menu } from '#lib/menu.svelte';
 	import type { Repeat } from '#lib/player.svelte';
+	import { spotify } from '#lib/spotify.svelte';
 
 	const REPEAT_LABEL: Record<Repeat, string> = { off: 'Repeat this song', one: 'Repeating this song' };
 	const song_item = () => {
@@ -16,12 +17,18 @@
 		return { name: c?.name ?? shown_name, artist: c?.artist ?? shown_artist, play: () => player.toggle() };
 	};
 
-	const shown_name = $derived(player.preview?.name ?? player.current?.name ?? '');
-	const shown_artist = $derived(player.preview?.artist ?? player.current?.artist ?? '');
-	const cover = $derived(player.preview?.cover ?? player.current?.image ?? null);
+	const shown_name = $derived(player.current?.name ?? player.track?.name ?? '');
+	const shown_artist = $derived(player.current?.artist ?? player.track?.artist ?? '');
+
+	async function full_songs() {
+		await spotify.connect(player.volume);
+		if (spotify.error) player.message = spotify.error;
+		else player.upgrade();
+	}
+	const cover = $derived(player.current?.image ?? player.track?.cover ?? null);
 	const pct = $derived(player.duration ? (player.time / player.duration) * 100 : 0);
 
-	const shown_cover = $derived(!player.loading && player.preview ? cover : undefined);
+	const shown_cover = $derived(!player.loading && player.track ? cover : undefined);
 	const tint_src = $derived.by(() => {
 		if (!player.current) return null;
 		if (shown_cover === undefined) return undefined;
@@ -100,14 +107,14 @@
 						{:else if player.loading}
 							<span class="sub ellipsis">Loading</span>
 						{:else}
-							<span class="sub artist ellipsis" {@attach link(() => artist_path(shown_artist))}>{shown_artist}</span>
+							<span class="sub artist ellipsis" {@attach link(() => artist_path(shown_artist))}>{player.current?.credits ?? shown_artist}</span>
 						{/if}
 					</div>
 					<div class="controls">
 						<button class="icon press prev" onclick={() => player.prev()} aria-label="Previous" disabled={!player.current}>
 							<svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z" /></svg>
 						</button>
-						<button class="icon main press" onclick={() => player.toggle()} aria-label={player.playing ? 'Pause' : 'Play'} disabled={!player.preview}>
+						<button class="icon main press" onclick={() => player.toggle()} aria-label={player.playing ? 'Pause' : 'Play'} disabled={!player.track}>
 							{#if player.loading}
 								<span class="spin" aria-hidden="true"></span>
 							{:else if player.playing}
@@ -131,6 +138,17 @@
 							</svg>
 							<span class="tip" role="tooltip">{REPEAT_LABEL[player.repeat]}</span>
 						</button>
+						{#if spotify.supported && !spotify.ready}
+							<button
+								class="full press tip_anchor"
+								onclick={full_songs}
+								disabled={spotify.status === 'connecting'}
+								aria-describedby="full_songs_tip"
+							>
+								{spotify.status === 'connecting' ? 'Connecting' : 'Full songs'}
+								<span class="tip" role="tooltip" id="full_songs_tip">Sign in with Spotify Premium</span>
+							</button>
+						{/if}
 						<button class="icon press close" onclick={() => player.close()} aria-label="Close player">
 							<svg viewBox="0 0 24 24"><path d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z" /></svg>
 						</button>
@@ -306,6 +324,27 @@
 		margin: 0 4px;
 		background: var(--accent);
 		color: var(--accent-ink);
+	}
+	.full {
+		flex: none;
+		height: 36px;
+		margin: 0 4px;
+		padding: 0 16px;
+		border-radius: 999px;
+		--press-scale: 0.94;
+		background: var(--tint);
+		font-weight: 600;
+		font-size: 0.85rem;
+		white-space: nowrap;
+	}
+	@media (hover: hover) {
+		.full:hover:not(:disabled) {
+			box-shadow: inset 0 0 0 999px var(--wash);
+		}
+	}
+	.full:disabled {
+		color: var(--muted);
+		cursor: default;
 	}
 	.close svg {
 		width: 18px;

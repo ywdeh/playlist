@@ -1,3 +1,4 @@
+import { best, norm, same_title } from '#lib/match';
 import type { Preview, QueueItem } from '#lib/player_types';
 
 const memory = new Map<string, { expires: number; value: unknown }>();
@@ -37,60 +38,6 @@ async function get_json(url: string, user_agent = 'music-stats-site/1.0'): Promi
 	return json;
 }
 
-const norm = (s: string) =>
-	s
-		.normalize('NFKD')
-		.replace(/[̀-ͯ]/g, '')
-		.toLowerCase()
-		.replace(/\(.*?\)|\[.*?\]|- .*(remaster|version|edit|mix).*$/g, '')
-		.replace(/[^a-z0-9]+/g, ' ')
-		.trim();
-
-function score(want: { name: string; artist: string }, got: { name: string; artist: string }) {
-	const a = norm(want.artist);
-	const b = norm(got.artist);
-	const n = norm(want.name);
-	const m = norm(got.name);
-	let s = 0;
-	if (a === b) s += 4;
-	else if (a && b && (a.includes(b) || b.includes(a))) s += 2;
-	if (n === m) s += 4;
-	else if (n && m && (n.includes(m) || m.includes(n))) s += 2;
-	if (want.name.trim().toLowerCase() === got.name.trim().toLowerCase()) s += 1;
-	const variant = /\b(demo|live|remix|instrumental|karaoke|acoustic|sped up|slowed|cover)\b/i;
-	if (variant.test(got.name) && !variant.test(want.name)) s -= 2;
-	return s;
-}
-
-const JOINS = /\s*(?:,|&|\+|\/|;|\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b|\bx\b|\band\b|\bvs\.?)\s*/i;
-
-function same_artist(want: string, got: string) {
-	const w = norm(want);
-	if (!w) return false;
-	return norm(got) === w || got.split(JOINS).some((part) => norm(part) === w);
-}
-
-function same_title(want: string, got: string) {
-	const n = norm(want);
-	const m = norm(got);
-	if (!n || !m) return false;
-	if (n === m) return true;
-	const [short, long] = n.length < m.length ? [n, m] : [m, n];
-	return long.includes(short) && short.length / long.length >= 0.6;
-}
-
-const best = <T>(items: T[], want: { name: string; artist: string }, pick: (t: T) => { name: string; artist: string }) => {
-	let top: T | null = null;
-	let top_score = -Infinity;
-	for (const item of items) {
-		const got = pick(item);
-		if (!same_artist(want.artist, got.artist) || !same_title(want.name, got.name)) continue;
-		const s = score(want, got);
-		if (s > top_score) ((top = item), (top_score = s));
-	}
-	return top;
-};
-
 const from_deezer = (t: any): Preview => ({
 	url: t.preview,
 	name: t.title,
@@ -127,18 +74,44 @@ async function itunes_song(name: string, artist: string): Promise<Preview | null
 		: null;
 }
 
-export function find_preview(name: string, artist: string): Promise<Preview | null> {
+async function deezer_isrc(isrc: string): Promise<Preview | null> {
+	const t = await get_json(`https://api.deezer.com/track/isrc:${encodeURIComponent(isrc)}`).catch((e: Error) => {
+		if (e.message === 'deezer 800') return null;
+		throw e;
+	});
+	return t?.preview ? from_deezer(t) : null;
+}
+
+async function deezer_exact(name: string, artist: string): Promise<Preview | null> {
+	const q = encodeURIComponent(`artist:"${artist.replace(/"/g, '')}" track:"${norm(name)}"`);
+	const json = await get_json(`https://api.deezer.com/search?q=${q}&limit=10`);
+	const hit = best((json.data ?? []).filter((t: any) => t.preview), { name, artist }, (t: any) => ({
+		name: t.title,
+		artist: t.artist?.name ?? ''
+	}));
+	return hit ? from_deezer(hit) : null;
+}
+
+export function find_preview(name: string, artist: string, isrc?: string): Promise<Preview | null> {
 	const key = `song:${norm(artist)}:${norm(name)}`;
 	return cached(key, 600, async () => {
-		try {
-			const d = await deezer_song(name, artist);
-			if (d) return d;
-		} catch {}
-		try {
-			return await itunes_song(name, artist);
-		} catch {
-			return null;
+		const attempts = [
+			...(isrc ? [() => deezer_isrc(isrc)] : []),
+			() => deezer_song(name, artist),
+			() => deezer_exact(name, artist),
+			() => itunes_song(name, artist)
+		];
+		let failed = false;
+		for (const attempt of attempts) {
+			try {
+				const found = await attempt();
+				if (found) return found;
+			} catch {
+				failed = true;
+			}
 		}
+		if (failed) throw new Error('preview lookup failed');
+		return null;
 	});
 }
 
@@ -332,23 +305,28 @@ async function deezer_artist(name: string, songs: string[] = []): Promise<any | 
 export function find_art(type: 'track' | 'artist', artist: string, name = '', songs: string[] = []): Promise<string | null> {
 	if (type === 'artist') {
 		return edge_cached(`art3:artist:${norm(artist)}`, 7 * 86400, async () => {
-			const hit = await deezer_artist(artist, songs).catch(() => null);
+			const hit = await deezer_artist(artist, songs);
 			const pic: string | undefined = hit?.picture_xl ?? hit?.picture_big;
 			return pic && !pic.includes('/artist//') ? pic : null;
 		});
 	}
-	return edge_cached(`art2:${type}:${norm(artist)}:${norm(name)}`, 7 * 86400, async () => {
+	return edge_cached(`art4:${type}:${norm(artist)}:${norm(name)}`, 7 * 86400, async () => {
+		let failed = false;
 		try {
 			const json = await get_json(`https://api.deezer.com/search?q=${encodeURIComponent(`${artist} ${name}`)}&limit=10`);
 			const hit = best(json.data ?? [], { name, artist }, (t: any) => ({ name: t.title, artist: t.artist?.name ?? '' }));
 			if (hit?.album?.cover_big) return hit.album.cover_big as string;
-		} catch {}
+		} catch {
+			failed = true;
+		}
 		try {
 			const p = await itunes_song(name, artist);
-			return p?.cover ?? null;
+			if (p?.cover) return p.cover;
 		} catch {
-			return null;
+			failed = true;
 		}
+		if (failed) throw new Error('cover lookup failed');
+		return null;
 	});
 }
 
@@ -367,16 +345,5 @@ export function artist_songs(artist: string, songs: string[] = []): Promise<(Que
 				album: (t.album?.title as string) || null,
 				duration: (t.duration as number) || null
 			}));
-	});
-}
-
-export function album_songs(album: string, artist: string): Promise<QueueItem[]> {
-	return cached(`album:${norm(artist)}:${norm(album)}`, 6 * 3600, async () => {
-		const q = encodeURIComponent(`${artist} ${album}`);
-		const search = await get_json(`https://api.deezer.com/search/album?q=${q}&limit=10`);
-		const match = best(search.data ?? [], { name: album, artist }, (a: any) => ({ name: a.title, artist: a.artist?.name ?? '' }));
-		if (!match) return [];
-		const tracks = await get_json(`https://api.deezer.com/album/${match.id}/tracks?limit=50`);
-		return (tracks.data ?? []).map((t: any) => ({ name: t.title, artist: t.artist?.name ?? artist, image: match.cover_medium ?? null }));
 	});
 }
