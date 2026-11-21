@@ -45,6 +45,43 @@
 		};
 	});
 
+	let armed: HTMLButtonElement | null = null;
+
+	function arm(next: HTMLButtonElement | null) {
+		if (next === armed) return;
+		armed?.removeAttribute('data-armed');
+		next?.setAttribute('data-armed', '');
+		armed = next;
+	}
+
+	$effect(() => {
+		if (!menu.open || !menu.held) return;
+		const aim = (t: Touch | undefined) => {
+			const hit = t && document.elementFromPoint(t.clientX, t.clientY)?.closest<HTMLButtonElement>('button[role="menuitem"]');
+			arm(hit && el?.contains(hit) && !hit.disabled ? hit : null);
+		};
+		const move = (e: TouchEvent) => {
+			e.preventDefault();
+			aim(e.touches[0]);
+		};
+		const lift = (e: TouchEvent) => {
+			e.preventDefault();
+			const pick = armed;
+			arm(null);
+			menu.held = false;
+			pick?.click();
+		};
+		addEventListener('touchmove', move, { capture: true, passive: false });
+		addEventListener('touchend', lift, { capture: true, passive: false });
+		addEventListener('touchcancel', lift, { capture: true, passive: false });
+		return () => {
+			removeEventListener('touchmove', move, true);
+			removeEventListener('touchend', lift, true);
+			removeEventListener('touchcancel', lift, true);
+			arm(null);
+		};
+	});
+
 	function run(fn: () => void) {
 		close_menu();
 		fn();
@@ -160,7 +197,8 @@
 			color var(--t-out) var(--ease-ui);
 	}
 	button:hover:not(:disabled),
-	button:focus-visible {
+	button:focus-visible,
+	.menu :global(button[data-armed]) {
 		background: var(--wash);
 		outline: none;
 	}

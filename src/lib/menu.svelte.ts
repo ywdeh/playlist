@@ -17,6 +17,7 @@ export interface MenuItem {
 class Menu {
 	id = $state(0);
 	open = $state(false);
+	held = $state(false);
 	x = $state(0);
 	y = $state(0);
 	items = $state.raw<MenuItem[]>([]);
@@ -27,6 +28,7 @@ export const menu = new Menu();
 
 export function close_menu() {
 	menu.open = false;
+	menu.held = false;
 }
 
 const HOLD_MS = 450;
@@ -44,7 +46,7 @@ export function context_menu(build: () => MenuParts) {
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		let start = { x: 0, y: 0 };
 
-		const show = (x: number, y: number) => {
+		const show = (x: number, y: number, held = false) => {
 			const { items, spotify, copy } = build();
 			menu.items = items;
 			menu.spotify = spotify;
@@ -52,6 +54,7 @@ export function context_menu(build: () => MenuParts) {
 			menu.x = x;
 			menu.y = y;
 			menu.id++;
+			menu.held = held;
 			menu.open = true;
 		};
 
@@ -83,7 +86,7 @@ export function context_menu(build: () => MenuParts) {
 				cancel();
 				held_at = Date.now();
 				if (e.pointerType === 'touch') navigator.vibrate?.(8);
-				show(start.x, start.y);
+				show(start.x, start.y, e.pointerType === 'touch');
 			}, HOLD_MS);
 		};
 		const click = (e: MouseEvent) => {
