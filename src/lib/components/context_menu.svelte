@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { fly } from 'svelte/transition';
 	import { ease, T_IN } from '#lib/motion';
-	import { close_menu, menu, spotify_href } from '#lib/menu.svelte';
+	import { close_menu, menu, open_spotify } from '#lib/menu.svelte';
 
 	let el = $state<HTMLElement>();
 	let pos = $state({ x: 0, y: 0 });
@@ -152,7 +152,7 @@
 			{/each}
 			{#if menu.items.length && menu.spotify.length}<div class="gap" role="separator"></div>{/if}
 			{#each menu.spotify as item (item.label)}
-				<button class="item" role="menuitem" onclick={() => run(() => window.open(spotify_href(item), '_blank', 'noopener'))}>
+				<button class="item" role="menuitem" onclick={() => run(() => open_spotify(item))}>
 					{item.url ? item.label : item.search_label}
 				</button>
 			{/each}
