@@ -82,6 +82,11 @@
 			animation: none;
 		}
 	}
+	@media (pointer: coarse), (max-width: 720px) {
+		.edge {
+			display: none;
+		}
+	}
 	@media print {
 		.edge,
 		.grain {
