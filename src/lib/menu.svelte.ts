@@ -32,7 +32,7 @@ export function close_menu() {
 }
 
 const HOLD_MS = 450;
-const HOLD_SLOP = 10;
+export const HOLD_SLOP = 10;
 
 interface MenuParts {
 	items: MenuItem[];
@@ -64,29 +64,41 @@ export function context_menu(build: () => MenuParts) {
 			show(e.clientX, e.clientY);
 		};
 
+		const strayed = (x: number, y: number) => Math.hypot(x - start.x, y - start.y) > HOLD_SLOP;
+		const move = (e: PointerEvent) => strayed(e.clientX, e.clientY) && cancel();
+		const touch_move = (e: TouchEvent) => {
+			const t = e.touches[0];
+			if (t && strayed(t.clientX, t.clientY)) cancel();
+		};
 		const cancel = () => {
 			clearTimeout(timer);
 			removeEventListener('pointermove', move, true);
 			removeEventListener('pointerup', cancel, true);
 			removeEventListener('pointercancel', cancel, true);
 			removeEventListener('scroll', cancel, true);
-		};
-		const move = (e: PointerEvent) => {
-			if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > HOLD_SLOP) cancel();
+			removeEventListener('touchmove', touch_move, true);
+			removeEventListener('touchend', cancel, true);
+			removeEventListener('touchcancel', cancel, true);
 		};
 		const down = (e: PointerEvent) => {
 			if (e.pointerType === 'mouse' && e.button !== 0) return;
 			cancel();
 			start = { x: e.clientX, y: e.clientY };
-			addEventListener('pointermove', move, true);
-			addEventListener('pointerup', cancel, true);
-			addEventListener('pointercancel', cancel, true);
-			addEventListener('scroll', cancel, true);
+			if (e.pointerType !== 'touch') {
+				addEventListener('pointermove', move, true);
+				addEventListener('pointerup', cancel, true);
+				addEventListener('pointercancel', cancel, true);
+				addEventListener('scroll', cancel, true);
+			} else {
+				addEventListener('touchmove', touch_move, { capture: true, passive: true });
+				addEventListener('touchend', cancel, true);
+				addEventListener('touchcancel', cancel, true);
+			}
 			timer = setTimeout(() => {
 				cancel();
 				held_at = Date.now();
 				if (e.pointerType === 'touch') navigator.vibrate?.(8);
-				show(start.x, start.y, e.pointerType === 'touch');
+				show(start.x, start.y, true);
 			}, HOLD_MS);
 		};
 		const click = (e: MouseEvent) => {

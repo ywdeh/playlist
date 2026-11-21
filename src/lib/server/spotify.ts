@@ -268,11 +268,11 @@ export async function artist_image(name: string): Promise<string | null> {
 }
 
 export async function artist_link(name: string): Promise<string | null> {
-	return (await find_artist(name).catch(() => null))?.spotify ?? null;
+	return (await find_artist(name))?.spotify ?? null;
 }
 
 export async function owner_song(name: string, artist: string): Promise<Song | null> {
-	const pool = await owner_tracks().catch(() => []);
+	const pool = await owner_tracks();
 	const want = song_key({ name, artist });
 	const hit = pool.find((t) => song_key({ name: t.name, artist: t.artists?.[0]?.name ?? '' }) === want);
 	return hit ? to_song(hit) : null;

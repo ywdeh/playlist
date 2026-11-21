@@ -2,6 +2,7 @@
 	import { ease, T_MOVE, T_OUT } from '#lib/motion';
 	import type { Snippet } from 'svelte';
 	import { reveal } from '#lib/reveal';
+	import { HOLD_SLOP, menu } from '#lib/menu.svelte';
 
 	let { title, order = 0, children }: { title: string; order?: number; children: Snippet } = $props();
 
@@ -90,9 +91,9 @@
 			start_left = el.scrollLeft;
 		};
 		const on_move = (e: PointerEvent) => {
-			if (!down) return;
+			if (!down || menu.held) return;
 			const dx = e.clientX - start_x;
-			if (!moved && Math.abs(dx) > 6) {
+			if (!moved && Math.abs(dx) > HOLD_SLOP) {
 				moved = dragging = true;
 				free(true);
 				el.setPointerCapture(e.pointerId);

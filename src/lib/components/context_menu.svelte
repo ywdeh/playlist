@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { fly } from 'svelte/transition';
 	import { ease, T_IN } from '#lib/motion';
-	import { close_menu, menu, spotify_link, type SpotifyItem, type SpotifyTarget } from '#lib/menu.svelte';
+	import { close_menu, menu, spotify_link, type SpotifyTarget } from '#lib/menu.svelte';
 
 	let el = $state<HTMLElement>();
 	let pos = $state({ x: 0, y: 0 });
@@ -35,15 +35,17 @@
 
 	$effect(() => {
 		if (!menu.open) return;
-		addEventListener('scroll', close_menu, true);
+		addEventListener('scroll', scrolled, true);
 		addEventListener('wheel', close_menu, { passive: true });
 		document.addEventListener('visibilitychange', close_menu);
 		return () => {
-			removeEventListener('scroll', close_menu, true);
+			removeEventListener('scroll', scrolled, true);
 			removeEventListener('wheel', close_menu);
 			document.removeEventListener('visibilitychange', close_menu);
 		};
 	});
+
+	const scrolled = () => !menu.held && close_menu();
 
 	const ENABLED = '[role="menuitem"]:not(:disabled, [aria-disabled="true"])';
 	let armed: HTMLElement | null = null;
@@ -57,39 +59,47 @@
 
 	$effect(() => {
 		if (!menu.open || !menu.held) return;
-		const aim = (t: Touch | undefined) => {
-			const hit = t && document.elementFromPoint(t.clientX, t.clientY)?.closest<HTMLElement>(ENABLED);
+		const aim = (x: number, y: number) => {
+			const hit = document.elementFromPoint(x, y)?.closest<HTMLElement>(ENABLED);
 			arm(hit && el?.contains(hit) ? hit : null);
 		};
-		const move = (e: TouchEvent) => {
-			e.preventDefault();
-			aim(e.touches[0]);
-		};
-		const lift = (e: TouchEvent) => {
-			e.preventDefault();
+		const release = () => {
 			const pick = armed;
 			arm(null);
 			menu.held = false;
-			pick?.click();
+			if (pick) pick.click();
+			else close_menu();
 		};
-		addEventListener('touchmove', move, { capture: true, passive: false });
-		addEventListener('touchend', lift, { capture: true, passive: false });
-		addEventListener('touchcancel', lift, { capture: true, passive: false });
+		const touch_move = (e: TouchEvent) => {
+			e.preventDefault();
+			const t = e.touches[0];
+			if (t) aim(t.clientX, t.clientY);
+		};
+		const touch_end = (e: TouchEvent) => {
+			e.preventDefault();
+			release();
+		};
+		const mouse_move = (e: PointerEvent) => e.pointerType === 'mouse' && aim(e.clientX, e.clientY);
+		const mouse_up = (e: PointerEvent) => {
+			if (e.pointerType !== 'mouse') return;
+			release();
+			addEventListener('click', swallow, { capture: true, once: true });
+			setTimeout(() => removeEventListener('click', swallow, true));
+		};
+		addEventListener('touchmove', touch_move, { capture: true, passive: false });
+		addEventListener('touchend', touch_end, { capture: true, passive: false });
+		addEventListener('touchcancel', touch_end, { capture: true, passive: false });
+		addEventListener('pointermove', mouse_move, true);
+		addEventListener('pointerup', mouse_up, true);
 		return () => {
-			removeEventListener('touchmove', move, true);
-			removeEventListener('touchend', lift, true);
-			removeEventListener('touchcancel', lift, true);
+			removeEventListener('touchmove', touch_move, true);
+			removeEventListener('touchend', touch_end, true);
+			removeEventListener('touchcancel', touch_end, true);
+			removeEventListener('pointermove', mouse_move, true);
+			removeEventListener('pointerup', mouse_up, true);
 			arm(null);
 		};
 	});
-
-	const touch = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
-
-	function open_spotify(item: SpotifyItem, to: SpotifyTarget | undefined) {
-		close_menu();
-		if (!touch && to) return void window.open(to.url, '_blank', 'noopener');
-		if (touch) spotify_link(item).then((t) => location.assign(t.url));
-	}
 
 	function run(fn: () => void) {
 		close_menu();
@@ -164,8 +174,8 @@
 					class="item"
 					role="menuitem"
 					class:looking={!to}
-					disabled={!to && !touch}
-					onclick={() => open_spotify(item, to)}
+					disabled={!to}
+					onclick={() => to && run(() => window.open(to.url, '_blank', 'noopener'))}
 				>
 					{to && !to.exact ? item.search_label : item.label}
 				</button>

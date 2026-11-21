@@ -5,7 +5,7 @@ import type { RequestHandler } from './$types';
 
 async function find(artist: string, name: string) {
 	if (name) {
-		const own = await owner_song(name, artist);
+		const own = await owner_song(name, artist).catch(() => null);
 		if (own?.image) return own.image;
 		const preview = await find_preview(name, artist).catch(() => null);
 		return preview?.cover ?? (await find_art('track', artist, name));
