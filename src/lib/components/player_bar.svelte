@@ -89,6 +89,68 @@
 		};
 	}
 
+	const SWIPE_START = 8;
+	const SWIPE_CLOSE = 64;
+	const SWIPE_FLICK = 0.5;
+	const SLIDERS = '.progress, .level';
+
+	function swipe(el: HTMLElement) {
+		let id: number | null = null;
+		let from = { x: 0, y: 0, t: 0 };
+		let pulled = 0;
+		let dragging = false;
+
+		const place = (y: number, animate: boolean) => {
+			el.style.transition = animate ? 'translate var(--t-move) var(--ease)' : 'none';
+			el.style.translate = y ? `0 ${y}px` : '';
+		};
+		const swallow = (e: Event) => {
+			e.preventDefault();
+			e.stopPropagation();
+		};
+		const down = (e: PointerEvent) => {
+			if (e.pointerType === 'mouse' || id !== null || (e.target as Element).closest(SLIDERS)) return;
+			id = e.pointerId;
+			from = { x: e.clientX, y: e.clientY, t: e.timeStamp };
+			pulled = 0;
+			dragging = false;
+		};
+		const move = (e: PointerEvent) => {
+			if (e.pointerId !== id) return;
+			const dx = e.clientX - from.x;
+			const dy = e.clientY - from.y;
+			if (!dragging) {
+				if (Math.hypot(dx, dy) < SWIPE_START) return;
+				if (Math.abs(dx) > Math.abs(dy)) return void (id = null);
+				dragging = true;
+				el.setPointerCapture(e.pointerId);
+			}
+			pulled = dy > 0 ? dy : dy / 4;
+			place(pulled, false);
+		};
+		const up = (e: PointerEvent) => {
+			if (e.pointerId !== id) return;
+			id = null;
+			if (!dragging) return;
+			addEventListener('click', swallow, { capture: true, once: true });
+			setTimeout(() => removeEventListener('click', swallow, true));
+			const speed = pulled / Math.max(1, e.timeStamp - from.t);
+			if (e.type === 'pointerup' && (pulled > SWIPE_CLOSE || speed > SWIPE_FLICK)) player.close();
+			else place(0, true);
+		};
+
+		el.addEventListener('pointerdown', down);
+		el.addEventListener('pointermove', move);
+		el.addEventListener('pointerup', up);
+		el.addEventListener('pointercancel', up);
+		return () => {
+			el.removeEventListener('pointerdown', down);
+			el.removeEventListener('pointermove', move);
+			el.removeEventListener('pointerup', up);
+			el.removeEventListener('pointercancel', up);
+		};
+	}
+
 	const REPEAT_LABEL: Record<Repeat, string> = { off: 'repeat this song', one: 'repeating this song' };
 	const song_item = () => {
 		const c = player.current;
@@ -164,8 +226,9 @@
 
 {#if player.current || player.message}
 	<div class="dock">
-		<div class="player" role="region" aria-label="Player" in:fly={{ y: 140, opacity: 1, duration: T_ENTER, easing: settle }}
+		<div class="player" role="region" aria-label="Player" {@attach swipe} in:fly={{ y: 140, opacity: 1, duration: T_ENTER, easing: settle }}
 			out:fly={{ y: 140, opacity: 1, duration: T_OUT, easing: ease_in }}>
+			<span class="grip" aria-hidden="true"></span>
 			<span class="halo" {@attach drift} {@attach hollow} aria-hidden="true">{#each WISPS as d (d)}
 					<span class="wisp">
 						<svg class="sharp" viewBox="0 0 {SPAN * 2} 100" preserveAspectRatio="none"><path {d} /></svg>
@@ -407,9 +470,26 @@
 			animation: none;
 		}
 	}
+	.grip {
+		display: none;
+	}
 	@media (pointer: coarse) {
+		.player {
+			touch-action: none;
+		}
 		.halo {
 			display: none;
+		}
+		.grip {
+			display: block;
+			position: absolute;
+			top: 5px;
+			left: 50%;
+			width: 36px;
+			height: 4px;
+			translate: -50% 0;
+			border-radius: 2px;
+			background: var(--tint);
 		}
 	}
 	.text {
