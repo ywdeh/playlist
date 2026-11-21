@@ -156,22 +156,7 @@ export function artist_menu(target: () => { artist: string; spotify?: string }) 
 	});
 }
 
-const APP_WAIT_MS = 1500;
-
-function open_app(app: string, web: string) {
-	const fallback = setTimeout(() => !document.hidden && (location.href = web), APP_WAIT_MS);
-	const left = () => document.hidden && clearTimeout(fallback);
-	document.addEventListener('visibilitychange', left, { once: true });
-	addEventListener('pagehide', () => clearTimeout(fallback), { once: true });
-	location.href = app;
-}
-
-const SPOTIFY_PAGE = /^https:\/\/open\.spotify\.com\/(track|artist|album|playlist)\/(\w+)/;
-
 export function open_spotify({ artist, name, url }: SpotifyItem) {
 	const query = encodeURIComponent(name ? `${name} ${artist}` : artist);
-	const web = url ?? `https://open.spotify.com/search/${query}${name ? '' : '/artists'}`;
-	if (!matchMedia('(pointer: coarse)').matches) return void window.open(web, '_blank', 'noopener');
-	const page = url?.match(SPOTIFY_PAGE);
-	open_app(page ? `spotify:${page[1]}:${page[2]}` : `spotify:search:${query}`, web);
+	window.open(url ?? `https://open.spotify.com/search/${query}${name ? '' : '/artists'}`, '_blank', 'noopener');
 }

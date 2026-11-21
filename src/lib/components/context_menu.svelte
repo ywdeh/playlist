@@ -53,14 +53,10 @@
 			if (pick) pick.click();
 			else close_menu();
 		};
-		const touch_move = (e: TouchEvent) => {
-			e.preventDefault();
-			const t = e.touches[0];
-			if (t) aim(t.clientX, t.clientY);
-		};
+		const touch_move = (e: TouchEvent) => e.preventDefault();
 		const touch_end = (e: TouchEvent) => {
 			e.preventDefault();
-			release();
+			menu.held = false;
 		};
 		const mouse_move = (e: PointerEvent) => e.pointerType === 'mouse' && aim(e.clientX, e.clientY);
 		const mouse_up = (e: PointerEvent) => {
