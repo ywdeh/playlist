@@ -1,4 +1,4 @@
-@import '@fontsource-variable/figtree';
+@import '@fontsource-variable/outfit';
 
 @property --mist {
 	syntax: '<color>';
@@ -32,6 +32,7 @@
 	--muted: color-mix(in oklab, #a1a1aa, var(--mist) calc(var(--tone-text) * 220%));
 
 	--mist: rgb(155 184 207);
+	--mist-target: rgb(155 184 207);
 	--mist-ink: #111214;
 	transition: --mist var(--t-tint) var(--ease-tint);
 
@@ -69,24 +70,25 @@
 	--fs-display: clamp(2.6rem, 10vw, 3.8rem);
 	--fw-ui: 500;
 	--fw-strong: 600;
+	--fw-name: 520;
 	--fw-heading: 650;
 
 	--ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 	--ease-ui: cubic-bezier(0.3, 0.3, 0, 1);
 	--ease-in: cubic-bezier(0.5, 0, 0.75, 0);
-	--ease-tint: cubic-bezier(0.4, 0, 0.2, 1);
+	--ease-tint: cubic-bezier(0.25, 0.6, 0.3, 1);
 	--t-in: 0.2s;
 	--t-out: 0.34s;
 	--t-move: 0.5s;
 	--t-enter: 0.6s;
 	--t-reveal: 0.8s;
-	--t-tint: 0.6s;
+	--t-tint: 0.4s;
 	--t-tick: 0.25s;
 
 	color-scheme: dark;
 	user-select: none;
 	-webkit-user-select: none;
-	font-family: 'Figtree Variable', ui-sans-serif, system-ui, sans-serif;
+	font-family: 'Outfit Variable', ui-sans-serif, system-ui, sans-serif;
 	font-size: 18px;
 	line-height: 1.35;
 	color: var(--text);
@@ -207,19 +209,9 @@ button {
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
-@supports (animation-timeline: scroll()) {
-	.ellipsis {
-		text-overflow: clip;
-		animation: fade_end linear both;
-		animation-timeline: scroll(self inline);
-		animation-duration: auto !important;
-	}
-	@keyframes fade_end {
-		from,
-		to {
-			mask-image: linear-gradient(to right, #000 calc(100% - 2.6em), transparent);
-		}
-	}
+.ellipsis[data-clipped] {
+	text-overflow: clip;
+	mask-image: linear-gradient(to right, #000 calc(100% - 2.6em), transparent);
 }
 .muted {
 	color: var(--muted);
@@ -238,8 +230,11 @@ button {
 	scale: var(--press-scale);
 	transition-duration: var(--t-in);
 }
+html.tinting .press {
+	transition-property: scale, opacity;
+}
 .cascade {
-	animation: cascade_in var(--t-enter) var(--ease) both;
+	animation: cascade_in var(--t-enter) var(--ease) backwards;
 	animation-delay: calc(min(var(--i, 0), 16) * 40ms);
 }
 .cascade:has(.tip_anchor:hover, .tip_anchor:focus-within, .tip_anchor.tip_show) {

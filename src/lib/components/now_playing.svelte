@@ -134,7 +134,7 @@
 	}
 	.title {
 		font-size: var(--fs-xl);
-		font-weight: var(--fw-heading);
+		font-weight: var(--fw-name);
 		letter-spacing: -0.02em;
 		line-height: 1.3;
 	}

@@ -6,13 +6,12 @@
 	import NowPlaying from './now_playing.svelte';
 	import { PERIODS, PERIOD_LABELS, type LiveData, type Period, type Playlist, type Top } from '#lib/music';
 	import { player } from '#lib/player.svelte';
-	import { playable } from '#lib/playable.svelte';
 	import { cover_url, tint_on_hover } from '#lib/tint.svelte';
 	import { link } from '#lib/link';
 	import { artist_menu, artist_path, song_menu } from '#lib/menu.svelte';
 	import { reveal } from '#lib/reveal';
 	import { flip } from '#lib/flip.svelte';
-	import { ago, length } from '#lib/format';
+	import { ago } from '#lib/format';
 	import { invalidateAll } from '$app/navigation';
 	import { clock, every, STATS_EVERY_MS } from '#lib/live.svelte';
 
@@ -27,7 +26,6 @@
 	const song_key = (s: { artist: string; name: string }) => `${s.artist}\u0000${s.name}`.toLowerCase();
 	const pinned_keys = $derived(new Set(pinned.map(song_key)));
 	const shift = $derived(Math.min(pinned.length, 10));
-	const recent = $derived(data.recent.slice(0, 24));
 
 	let picked = $state<Top | null>(null);
 	let pending = $state<Period | null>(null);
@@ -138,36 +136,13 @@
 	{/if}
 {/key}
 
-{#if data.fresh.length}
-	<Shelf title="new" order={16 + shift}>
-		{#each data.fresh as s, i (s.artist + s.name)}
-			<button
-					class="item tile press"
-					class:active={player.is_current(s)}
-					class:muted={playable.state(s) === 'no'}
-					onclick={() => playable.state(s) !== 'no' && player.play(data.fresh, i)}
-					{@attach playable.watch(() => s)}
-					{@attach tint_on_hover(() => cover_url(s.image, s.artist, s.name))}
-					{@attach song_menu(() => ({ name: s.name, artist: s.artist, spotify: s.spotify, play: () => player.play(data.fresh, i) }))}
-				>
-				<Cover src={s.image} artist={s.artist} name={s.name} />
-				<span class="label ellipsis">{s.name}</span>
-				<span class="sub">
-					<span class="ellipsis">{s.credits ?? s.artist}</span>
-					{#if s.duration}<span class="length">{length(s.duration)}</span>{/if}
-				</span>
-			</button>
-		{/each}
-	</Shelf>
-{/if}
-
-{#if recent.length}
-	<section class="block cascade" style:--i={17 + shift} {@attach reveal}>
-		<h2>recently played</h2>
-		<MoreList total={recent.length} order={27 + shift}>
-			<ul class="list" {@attach flip(() => recent)}>
-				{#each recent as r, i (r.at + r.name)}
-					<Row song={r} order={18 + shift + Math.min(i, 9)} meta={ago(r.at, clock.now)} onplay={() => player.play(recent, i)} />
+{#if data.enjoyed.length}
+	<section class="block cascade" style:--i={16 + shift} {@attach reveal}>
+		<h2>recently enjoyed</h2>
+		<MoreList total={data.enjoyed.length} order={27 + shift}>
+			<ul class="list" {@attach flip(() => data.enjoyed)}>
+				{#each data.enjoyed as s, i (s.artist + s.name)}
+					<Row song={s} order={17 + shift + Math.min(i, 9)} onplay={() => player.play(data.enjoyed, i)} />
 				{/each}
 			</ul>
 		</MoreList>
@@ -180,14 +155,14 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 16px;
-		margin: 24px 0 40px;
+		margin: clamp(24px, 10svh, 120px) 0 clamp(40px, 5svh, 56px);
 	}
 	h1 {
 		line-height: 1;
 	}
 	.intro {
 		max-width: 34em;
-		margin: -16px 0 44px;
+		margin: -16px 0 clamp(44px, 7svh, 88px);
 		color: var(--muted);
 		font-size: var(--fs-lg);
 		line-height: 1.6;
@@ -195,7 +170,7 @@
 	}
 	@media (max-width: 520px) {
 		.intro {
-			margin: -12px 0 32px;
+			margin: -12px 0 clamp(32px, 5svh, 56px);
 			font-size: var(--fs-md);
 		}
 	}
@@ -237,7 +212,7 @@
 	.periods {
 		display: flex;
 		gap: 12px;
-		margin: 50px -6px -6px;
+		margin: clamp(50px, 8svh, 104px) -6px -6px;
 		padding: 6px;
 		overflow-x: auto;
 		scrollbar-width: none;
@@ -245,7 +220,7 @@
 	@media (max-width: 520px) {
 		.periods {
 			gap: 8px;
-			margin-top: 34px;
+			margin-top: clamp(34px, 6svh, 64px);
 		}
 		.periods button {
 			flex: 1 1 0;
@@ -254,7 +229,7 @@
 			padding: 0 8px;
 		}
 		.title {
-			margin: 8px 0 32px;
+			margin: clamp(8px, 6svh, 64px) 0 32px;
 		}
 	}
 	.list {
@@ -285,34 +260,9 @@
 		width: 100%;
 		margin-bottom: 12px;
 	}
-	.tile :global(.art) {
-		--art-r: var(--r-md);
-	}
 	.label {
-		font-weight: var(--fw-strong);
+		font-weight: var(--fw-name);
 		font-size: var(--fs-lg);
 		line-height: 26px;
-	}
-	.tile > * {
-		transition: opacity var(--t-move) var(--ease);
-	}
-	.tile.muted > * {
-		opacity: var(--tone-off);
-	}
-	.tile.active .label {
-		color: var(--accent);
-	}
-	.length {
-		flex: none;
-		font-variant-numeric: tabular-nums;
-	}
-	.sub {
-		display: flex;
-		justify-content: space-between;
-		gap: 10px;
-		min-width: 0;
-		color: var(--muted);
-		font-size: var(--fs-sm);
-		line-height: 22px;
 	}
 </style>

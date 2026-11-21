@@ -1,15 +1,17 @@
 <script lang="ts">
 	import '../app.css';
-	import font from '@fontsource-variable/figtree/files/figtree-latin-wght-normal.woff2?url';
+	import font from '@fontsource-variable/outfit/files/outfit-latin-wght-normal.woff2?url';
 	import PlayerBar from '#lib/components/player_bar.svelte';
 	import ContextMenu from '#lib/components/context_menu.svelte';
 	import Footer from '#lib/components/footer.svelte';
 	import { tint_root } from '#lib/tint.svelte';
 	import { tooltips } from '#lib/tooltip.svelte';
+	import { clip_fades } from '#lib/clip.svelte';
 
 	let { children } = $props();
 	tint_root();
 	tooltips();
+	clip_fades();
 </script>
 
 <svelte:head>
@@ -24,6 +26,8 @@
 <PlayerBar />
 <ContextMenu />
 
+<div class="edge top" aria-hidden="true"></div>
+<div class="edge bottom" aria-hidden="true"></div>
 <div class="grain" aria-hidden="true"></div>
 
 <style>
@@ -36,6 +40,22 @@
 		main {
 			padding-top: 32px;
 		}
+	}
+	.edge {
+		position: fixed;
+		left: 0;
+		right: 0;
+		z-index: 15;
+		height: 1.5rem;
+		pointer-events: none;
+		background: linear-gradient(var(--bg), transparent);
+	}
+	.top {
+		top: 0;
+	}
+	.bottom {
+		bottom: 0;
+		rotate: 180deg;
 	}
 	.grain {
 		position: fixed;
@@ -63,6 +83,7 @@
 		}
 	}
 	@media print {
+		.edge,
 		.grain {
 			display: none;
 		}

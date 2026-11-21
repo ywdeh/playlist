@@ -4,7 +4,8 @@
 	import { player } from '#lib/player.svelte';
 	import { cover_url, tint_on_hover } from '#lib/tint.svelte';
 	import { song_menu } from '#lib/menu.svelte';
-	import { length } from '#lib/format';
+	import { ago, length } from '#lib/format';
+	import { clock } from '#lib/live.svelte';
 	import { playable } from '#lib/playable.svelte';
 	import type { Song } from '#lib/music';
 
@@ -12,22 +13,20 @@
 		song,
 		rank,
 		pinned = false,
-		meta,
 		order = 0,
 		onplay
 	}: {
 		song: Song;
 		rank?: number;
 		pinned?: boolean;
-		meta?: string;
 		order?: number;
 		onplay: () => void;
 	} = $props();
 
-	const { name, artist, image, album, duration } = $derived(song);
+	const { name, artist, image, album, duration, played } = $derived(song);
 	const active = $derived(player.is_current(song));
 	const muted = $derived(playable.state(song) === 'no');
-	const end = $derived(meta ?? (duration ? length(duration) : ''));
+	const end = $derived(played ? ago(played, clock.now) : duration ? length(duration) : '');
 </script>
 
 <li class="cascade" style:--i={order}>
@@ -128,7 +127,7 @@
 	}
 	.name {
 		font-size: var(--fs-lg);
-		font-weight: var(--fw-strong);
+		font-weight: var(--fw-name);
 	}
 	.active .name {
 		color: var(--accent);

@@ -9,6 +9,85 @@
 	import { artist_path, song_menu } from '#lib/menu.svelte';
 	import type { Repeat } from '#lib/player.svelte';
 
+	const SPAN = 1200;
+	function ribbon(amp: number, waves: number, swells: number, thick: number, phase: number) {
+		const top: string[] = [];
+		const bottom: string[] = [];
+		for (let x = 0; x <= SPAN * 2; x += 12) {
+			const a = (x / SPAN) * Math.PI * 2;
+			const y = 50 + amp * Math.sin(a * waves + phase);
+			const w = thick * (0.1 + 0.45 * (1 + Math.sin(a * swells + phase * 1.7)));
+			top.push(`${x} ${(y - w).toFixed(2)}`);
+			bottom.unshift(`${x} ${(y + w).toFixed(2)}`);
+		}
+		return `M${top.join('L')}L${bottom.join('L')}Z`;
+	}
+	const WISPS = [ribbon(24, 2, 3, 2.2, 0), ribbon(32, 1, 2, 1.6, 2.1), ribbon(18, 3, 5, 1.3, 4.3)];
+
+	const DRIFT_RAMP_MS = 1200;
+	const drift_rate = new WeakMap<HTMLElement, number>();
+	const smooth = (p: number) => p * p * (3 - 2 * p);
+
+	function drift(el: HTMLElement) {
+		const target = player.playing ? 1 : 0;
+		const from = drift_rate.get(el) ?? target;
+		const start = performance.now();
+		let frame = 0;
+		const step = (now: number) => {
+			const p = Math.min((now - start) / DRIFT_RAMP_MS, 1);
+			const rate = from + (target - from) * smooth(p);
+			drift_rate.set(el, rate);
+			for (const a of el.getAnimations({ subtree: true })) a.playbackRate = rate;
+			if (p < 1) frame = requestAnimationFrame(step);
+		};
+		step(start);
+		return () => cancelAnimationFrame(frame);
+	}
+
+	const SHIELDED = '.cover, .title, .sub, .controls, .tools, .volume, .time';
+	const HOLLOW_PAD = 8;
+	const HOLLOW_BLUR = 10;
+
+	function hollow(el: HTMLElement) {
+		const panel = el.parentElement!;
+		let frame = 0;
+		const draw = () => {
+			const box = panel.getBoundingClientRect();
+			const holes = [...panel.querySelectorAll<HTMLElement>(SHIELDED)]
+				.map((n) => n.getBoundingClientRect())
+				.filter((r) => r.width && r.height)
+				.map((r) => {
+					const x = r.left - box.left - HOLLOW_PAD;
+					const y = r.top - box.top - HOLLOW_PAD;
+					const w = r.width + HOLLOW_PAD * 2;
+					const h = r.height + HOLLOW_PAD * 2;
+					return `<rect x='${x}' y='${y}' width='${w}' height='${h}' rx='${Math.min(h / 2, 24)}'/>`;
+				})
+				.join('');
+			const svg =
+				`<svg xmlns='http://www.w3.org/2000/svg' width='${box.width}' height='${box.height}'>` +
+				`<filter id='b' x='-50%' y='-50%' width='200%' height='200%'><feGaussianBlur stdDeviation='${HOLLOW_BLUR}'/></filter>` +
+				`<linearGradient id='f'><stop offset='0' stop-opacity='0'/><stop offset='.18'/><stop offset='.82'/><stop offset='1' stop-opacity='0'/></linearGradient>` +
+				`<mask id='m'><rect width='100%' height='100%' fill='white'/><g fill='black' filter='url(#b)'>${holes}</g></mask>` +
+				`<rect width='100%' height='100%' fill='url(#f)' mask='url(#m)'/></svg>`;
+			el.style.maskImage = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+		};
+		const schedule = () => {
+			cancelAnimationFrame(frame);
+			frame = requestAnimationFrame(draw);
+		};
+		const resized = new ResizeObserver(schedule);
+		resized.observe(panel);
+		const changed = new MutationObserver(schedule);
+		changed.observe(panel, { subtree: true, childList: true, characterData: true });
+		draw();
+		return () => {
+			cancelAnimationFrame(frame);
+			resized.disconnect();
+			changed.disconnect();
+		};
+	}
+
 	const REPEAT_LABEL: Record<Repeat, string> = { off: 'repeat this song', one: 'repeating this song' };
 	const song_item = () => {
 		const c = player.current;
@@ -22,12 +101,13 @@
 	const pct = $derived(player.duration ? (player.time / player.duration) * 100 : 0);
 
 	const shown_cover = $derived(!player.loading && player.track ? cover : undefined);
-	playing_tint(() => {
+	const cover_src = $derived.by(() => {
 		if (!player.current) return null;
 		if (shown_cover === undefined) return undefined;
 		const { name, artist } = player.current;
 		return shown_cover ?? `/api/art?${new URLSearchParams({ artist, name })}`;
 	});
+	playing_tint(() => cover_src);
 
 	let scrub = $state<number | null>(null);
 	const shown_pct = $derived(scrub !== null ? scrub * 100 : pct);
@@ -85,6 +165,12 @@
 	<div class="dock">
 		<div class="player" role="region" aria-label="Player" in:fly={{ y: 140, opacity: 1, duration: T_ENTER, easing: settle }}
 			out:fly={{ y: 140, opacity: 1, duration: T_OUT, easing: ease_in }}>
+			<span class="halo" {@attach drift} {@attach hollow} aria-hidden="true">{#each WISPS as d (d)}
+					<span class="wisp">
+						<svg class="sharp" viewBox="0 0 {SPAN * 2} 100" preserveAspectRatio="none"><path {d} /></svg>
+						<svg class="soft" viewBox="0 0 {SPAN * 2} 100" preserveAspectRatio="none"><path {d} /></svg>
+					</span>
+				{/each}</span>
 			<div class="info">
 				{#key cover}
 					<span
@@ -221,6 +307,8 @@
 		max-width: calc(1080px - 2 * var(--gutter) + 28px);
 		margin: 0 auto;
 		padding: 12px 16px 12px 12px;
+		--cover-size: 72px;
+		position: relative;
 		border-radius: var(--r-lg);
 		background: color-mix(in srgb, var(--surface) 92%, transparent);
 		backdrop-filter: blur(24px);
@@ -232,7 +320,7 @@
 	.cover {
 		display: block;
 		flex: none;
-		width: 72px;
+		width: var(--cover-size);
 	}
 	.cover :global(.art) {
 		--art-r: var(--r-sm);
@@ -244,6 +332,80 @@
 		gap: 16px;
 		min-width: 0;
 	}
+	.halo {
+		position: absolute;
+		inset: 0;
+		z-index: -1;
+		overflow: hidden;
+		border-radius: inherit;
+		pointer-events: none;
+		mask-size: 100% 100%;
+	}
+	.wisp {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 200%;
+		height: 100%;
+		fill: color-mix(in srgb, var(--mist-target) 4%, transparent);
+		animation:
+			flow 26s linear infinite,
+			sway 7s ease-in-out infinite;
+		--blur: 6px;
+		--shift: 0%;
+	}
+	.wisp svg {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		mask-size: 25% 100%;
+		mask-position: var(--shift) 0;
+	}
+	.sharp {
+		filter: blur(1px);
+		mask-image: linear-gradient(90deg, #000, transparent 36%, transparent 64%, #000);
+	}
+	.soft {
+		filter: blur(var(--blur));
+		mask-image: linear-gradient(90deg, transparent, #000 36%, #000 64%, transparent);
+	}
+	.wisp:nth-child(2) {
+		fill: color-mix(in srgb, var(--mist-target) 2.5%, transparent);
+		animation-duration: 38s, 9s;
+		animation-delay: -12s, -3s;
+		--blur: 10px;
+		--shift: 40%;
+	}
+	.wisp:nth-child(3) {
+		fill: color-mix(in srgb, var(--mist-target) 3%, transparent);
+		animation-duration: 19s, 5.5s;
+		animation-delay: -7s, -1s;
+		--blur: 4px;
+		--shift: 70%;
+	}
+	@keyframes flow {
+		to {
+			translate: -50% 0;
+		}
+	}
+	@keyframes sway {
+		0%,
+		100% {
+			scale: 1 1;
+		}
+		35% {
+			scale: 1 1.35;
+		}
+		70% {
+			scale: 1 0.8;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.wisp {
+			animation: none;
+		}
+	}
 	.text {
 		display: grid;
 		gap: 2px;
@@ -252,7 +414,7 @@
 	.title {
 		justify-self: start;
 		max-width: 100%;
-		font-weight: var(--fw-strong);
+		font-weight: var(--fw-name);
 		font-size: var(--fs-lg);
 		line-height: 1.3;
 	}
@@ -486,9 +648,7 @@
 			grid-template-columns: minmax(0, 1fr) auto auto;
 			grid-template-areas: 'info controls tools' 'seek seek seek';
 			gap: 8px 16px;
-		}
-		.cover {
-			width: 48px;
+			--cover-size: 48px;
 		}
 		.seek {
 			padding: 0 4px 4px;

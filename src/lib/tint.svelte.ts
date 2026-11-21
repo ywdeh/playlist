@@ -1,65 +1,80 @@
 import { cover_tint, known_tint } from './cover_tint';
 
-const HOVER_IN_MS = 150;
-const HOVER_OUT_MS = 400;
+const HOVER_IN_MS = 180;
+const HOVER_OUT_MS = 360;
+const MIST = ['--mist', '--mist-target'];
 
-let hover = $state<string | null>(null);
-let playing = $state<string | null | undefined>(null);
-let page = $state<string | null>(null);
-let live = $state<string | null>(null);
+const sources = $state<{ hover: string | null; song: string | null | undefined; live: string | null; page: string | null }>({
+	hover: null,
+	song: null,
+	live: null,
+	page: null
+});
 
-function layer(set: (p: string | null) => void, get: () => string | null) {
+function layer(key: 'live' | 'page') {
 	return (picture: () => string | null) => {
-		$effect(() => {
+		$effect.pre(() => {
 			const p = picture();
-			set(p);
+			sources[key] = p;
 			return () => {
-				if (get() === p) set(null);
+				if (sources[key] === p) sources[key] = null;
 			};
 		});
 	};
 }
 
-export const page_tint = layer(
-	(p) => (page = p),
-	() => page
-);
-export const live_tint = layer(
-	(p) => (live = p),
-	() => live
-);
+export const page_tint = layer('page');
+export const live_tint = layer('live');
 
 export function playing_tint(picture: () => string | null | undefined) {
-	$effect(() => {
-		playing = picture();
-		return () => (playing = null);
+	$effect.pre(() => {
+		sources.song = picture();
+		return () => (sources.song = null);
 	});
 }
 
 let painted: string | null = null;
+let fade_ms = 0;
+let fading: ReturnType<typeof setTimeout> | undefined;
 
 function paint(colour: string | null) {
-	if (colour === painted) return;
-	painted = colour;
 	const root = document.documentElement;
-	if (colour) root.style.setProperty('--mist', colour);
-	else root.style.removeProperty('--mist');
+	if (colour !== painted) {
+		painted = colour;
+		const ready = root.classList.contains('ready');
+		if (!ready) root.style.transition = 'none';
+		for (const name of MIST) {
+			if (colour) root.style.setProperty(name, colour);
+			else root.style.removeProperty(name);
+		}
+		if (ready) {
+			root.classList.add('tinting');
+			clearTimeout(fading);
+			fading = setTimeout(() => root.classList.remove('tinting'), fade_ms);
+		} else {
+			getComputedStyle(root).getPropertyValue('--mist');
+			root.style.removeProperty('transition');
+		}
+	}
+	(window as { tint_done?: () => void }).tint_done?.();
 }
 
 export function tint_root() {
 	$effect(() => {
-		const hovered = hover;
-		const base = playing === undefined ? undefined : (playing ?? page ?? live);
-		const src = hovered ?? base;
-		if (src === undefined) return;
-		if (src === null) return paint(null);
-		const settle = (colour: string | null) => {
-			if (colour || !hovered) paint(colour);
+		fade_ms = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--t-tint')) * 1000 || 0;
+	});
+	$effect(() => {
+		const { hover, song, live, page } = sources;
+		if (!hover && song === undefined) return;
+		const src = hover ?? song ?? live ?? page;
+		const apply = (colour: string | null) => {
+			if (colour || !hover) paint(colour);
 		};
+		if (!src) return paint(null);
 		const known = known_tint(src);
-		if (known !== undefined) return settle(known);
+		if (known !== undefined) return apply(known);
 		let current = true;
-		cover_tint(src).then((colour) => current && settle(colour));
+		cover_tint(src).then((colour) => current && apply(colour));
 		return () => {
 			current = false;
 		};
@@ -68,53 +83,52 @@ export function tint_root() {
 
 let pointed: HTMLElement | null = null;
 const covers = new WeakMap<HTMLElement, () => string | null>();
-let rest_timer: ReturnType<typeof setTimeout> | undefined;
+let last_move = 0;
+let resting: ReturnType<typeof setTimeout> | undefined;
+
+const rest_ms = () => (pointed ? HOVER_IN_MS : HOVER_OUT_MS);
+
+function rest() {
+	const left = rest_ms() - (performance.now() - last_move);
+	if (left > 0) return void (resting = setTimeout(rest, left));
+	resting = undefined;
+	sources.hover = pointed ? (covers.get(pointed)?.() ?? null) : null;
+}
 
 function moved() {
-	clearTimeout(rest_timer);
-	rest_timer = setTimeout(
-		() => (hover = pointed ? (covers.get(pointed)?.() ?? null) : null),
-		pointed ? HOVER_IN_MS : HOVER_OUT_MS
-	);
+	last_move = performance.now();
+	resting ??= setTimeout(rest, rest_ms());
 }
 
+function point(el: HTMLElement | null) {
+	pointed = el;
+	clearTimeout(resting);
+	resting = undefined;
+	moved();
+}
+
+let watching = false;
+
 function watch() {
-	if (typeof window === 'undefined' || watch.on) return;
-	watch.on = true;
-	addEventListener(
-		'pointermove',
-		(e) => {
-			if (e.pointerType === 'mouse') moved();
-		},
-		{ passive: true }
-	);
+	if (watching || typeof window === 'undefined') return;
+	watching = true;
+	const mouse = (e: PointerEvent) => e.pointerType === 'mouse' && moved();
+	addEventListener('pointermove', mouse, { passive: true });
 	addEventListener('scroll', moved, { capture: true, passive: true });
 }
-watch.on = false;
 
 export function tint_on_hover(cover: () => string | null) {
 	return (el: HTMLElement) => {
 		watch();
 		covers.set(el, cover);
-		const enter = (e: PointerEvent) => {
-			if (e.pointerType !== 'mouse') return;
-			pointed = el;
-			moved();
-		};
-		const leave = (e: PointerEvent) => {
-			if (e.pointerType !== 'mouse') return;
-			if (pointed === el) pointed = null;
-			moved();
-		};
+		const enter = (e: PointerEvent) => e.pointerType === 'mouse' && point(el);
+		const leave = (e: PointerEvent) => e.pointerType === 'mouse' && pointed === el && point(null);
 		el.addEventListener('pointerenter', enter);
 		el.addEventListener('pointerleave', leave);
 		return () => {
 			el.removeEventListener('pointerenter', enter);
 			el.removeEventListener('pointerleave', leave);
-			if (pointed === el) {
-				pointed = null;
-				moved();
-			}
+			if (pointed === el) point(null);
 		};
 	};
 }

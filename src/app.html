@@ -26,9 +26,15 @@
 				var show = function () {
 					root.classList.add('ready');
 				};
-				if (!document.fonts) return show();
+				var tinted = new Promise(function (r) {
+					window.tint_done = r;
+				});
 				Promise.race([
-					Promise.all([document.fonts.load('600 1em "Figtree Variable"'), document.fonts.ready]),
+					Promise.all([
+						document.fonts ? document.fonts.load('600 1em "Outfit Variable"') : null,
+						document.fonts ? document.fonts.ready : null,
+						tinted
+					]),
 					new Promise(function (r) {
 						setTimeout(r, 1500);
 					})

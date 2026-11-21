@@ -2,6 +2,8 @@ const MIST_L = 0.77;
 const MAX_C = 0.075;
 const MIN_C = 0.015;
 
+const SIZE = 32;
+
 const cache = new Map<string, Promise<string | null>>();
 const done = new Map<string, string | null>();
 
@@ -22,6 +24,13 @@ export function cover_tint(src: string): Promise<string | null> {
 
 export const known_tint = (src: string) => done.get(src);
 
+export function tint_ready(src: string, ms = 800) {
+	if (done.has(src)) return Promise.resolve(done.get(src)!);
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const late = new Promise<null>((r) => (timer = setTimeout(() => r(null), ms)));
+	return Promise.race([cover_tint(src), late]).finally(() => clearTimeout(timer));
+}
+
 const waiting: string[] = [];
 let warming = false;
 const can_hover = () => typeof matchMedia !== 'undefined' && matchMedia('(hover: hover)').matches;
@@ -41,19 +50,27 @@ function next() {
 	idle(() => cover_tint(src).finally(next));
 }
 
+let context: CanvasRenderingContext2D | null | undefined;
+function sampler() {
+	if (context !== undefined) return context;
+	const canvas = document.createElement('canvas');
+	canvas.width = canvas.height = SIZE;
+	return (context = canvas.getContext('2d', { willReadFrequently: true }));
+}
+
 async function compute(src: string): Promise<string | null> {
 	const res = await fetch(src, { mode: 'cors' });
 	if (!res.ok) return null;
-	const size = 32;
-	const img = await createImageBitmap(await res.blob(), { resizeWidth: size, resizeHeight: size, resizeQuality: 'low' });
-
-	const canvas = document.createElement('canvas');
-	canvas.width = canvas.height = size;
-	const ctx = canvas.getContext('2d', { willReadFrequently: true });
-	if (!ctx) return null;
-	ctx.drawImage(img, 0, 0, size, size);
+	const img = await createImageBitmap(await res.blob(), { resizeWidth: SIZE, resizeHeight: SIZE, resizeQuality: 'low' });
+	const ctx = sampler();
+	if (!ctx) {
+		img.close();
+		return null;
+	}
+	ctx.clearRect(0, 0, SIZE, SIZE);
+	ctx.drawImage(img, 0, 0, SIZE, SIZE);
 	img.close();
-	const px = ctx.getImageData(0, 0, size, size).data;
+	const px = ctx.getImageData(0, 0, SIZE, SIZE).data;
 
 	const BINS = 24;
 	const votes = new Float64Array(BINS);
@@ -65,7 +82,7 @@ async function compute(src: string): Promise<string | null> {
 	let grey_b = 0;
 	const n = px.length / 4;
 	for (let i = 0; i < px.length; i += 4) {
-		const [L, a, b] = linear_to_oklab(to_linear(px[i] / 255), to_linear(px[i + 1] / 255), to_linear(px[i + 2] / 255));
+		const [L, a, b] = linear_to_oklab(LINEAR[px[i]], LINEAR[px[i + 1]], LINEAR[px[i + 2]]);
 		grey_a += a;
 		grey_b += b;
 		if (L < 0.12 || L > 0.97) continue;
@@ -113,6 +130,7 @@ async function compute(src: string): Promise<string | null> {
 }
 
 const to_linear = (v: number) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+const LINEAR = Float64Array.from({ length: 256 }, (_, i) => to_linear(i / 255));
 const from_linear = (v: number) => (v <= 0.0031308 ? v * 12.92 : 1.055 * v ** (1 / 2.4) - 0.055);
 
 function linear_to_oklab(r: number, g: number, b: number) {

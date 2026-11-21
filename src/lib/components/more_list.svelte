@@ -60,25 +60,26 @@
 	}
 </script>
 
-<div
-	class="fold"
-	class:folds
-	class:open
-	style:--slide="{SLIDE_MS}ms"
-	style:max-height={folds && cut !== null ? `${cut}px` : null}
-	style:--fade-to={fade !== null ? `${fade}px` : null}
-	{@attach watch}
->
-	{@render children()}
+<div class="more_list" style:--fade-to={fade !== null ? `${fade}px` : null}>
+	<div
+		class="fold"
+		class:folds
+		class:open
+		style:--slide="{SLIDE_MS}ms"
+		style:max-height={folds && cut !== null ? `${cut}px` : null}
+		{@attach watch}
+	>
+		{@render children()}
+	</div>
 	{#if folds && !open}
-		<button class="peek" tabindex="-1" aria-hidden="true" onclick={more}></button>
+		<button class="zone" tabindex="-1" aria-hidden="true" onclick={more}></button>
+	{/if}
+	{#if folds}
+		<button class="more pill press cascade" style:--i={order} onclick={toggle} aria-expanded={open}>
+			{#key label}<span class="label">{label}</span>{/key}
+		</button>
 	{/if}
 </div>
-{#if folds}
-	<button class="more pill press cascade" style:--i={order} onclick={toggle} aria-expanded={open}>
-		{#key label}<span class="label">{label}</span>{/key}
-	</button>
-{/if}
 
 <style>
 	.fold {
@@ -95,11 +96,21 @@
 			max-height var(--slide) var(--ease),
 			--fade var(--slide) var(--ease);
 	}
-	.peek {
+	.more_list {
+		position: relative;
+	}
+	.zone {
 		position: absolute;
-		inset: auto 0 0;
-		height: var(--fade-to, 70px);
-		cursor: default;
+		left: -20px;
+		right: -20px;
+		bottom: 0;
+		height: calc(var(--fade-to, 70px) + 70px);
+	}
+	.more_list:has(.zone:hover) .more {
+		box-shadow: inset 0 0 0 999px var(--wash);
+	}
+	.more_list:has(.zone:active) .more {
+		scale: var(--press-scale);
 	}
 	.folds.open {
 		--fade: 0px;
@@ -110,6 +121,7 @@
 		}
 	}
 	.more {
+		position: relative;
 		margin-top: 22px;
 	}
 	.label {

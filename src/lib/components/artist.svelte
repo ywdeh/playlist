@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Cover from './cover.svelte';
 	import Row from './row.svelte';
+	import MoreList from './more_list.svelte';
 	import type { ArtistData } from '#lib/music';
 	import { player } from '#lib/player.svelte';
 	import { cover_url, page_tint, tint_on_hover } from '#lib/tint.svelte';
@@ -69,15 +70,17 @@
 {#if data.popular.length}
 	<section {@attach reveal}>
 		<h2 class="cascade" style:--i={6 + data.yours.length}>popular</h2>
-		<ul class="list">
-			{#each data.popular as s, i (s.artist + s.name)}
-				<Row
-					song={s}
-					order={7 + data.yours.length + i}
-					onplay={() => player.play(all, data.yours.length + i)}
-				/>
-			{/each}
-		</ul>
+		<MoreList total={data.popular.length} order={7 + data.yours.length + Math.min(data.popular.length, 8)}>
+			<ul class="list">
+				{#each data.popular as s, i (s.artist + s.name)}
+					<Row
+						song={s}
+						order={7 + data.yours.length + Math.min(i, 8)}
+						onplay={() => player.play(all, data.yours.length + i)}
+					/>
+				{/each}
+			</ul>
+		</MoreList>
 	</section>
 {/if}
 

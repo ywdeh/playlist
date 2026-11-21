@@ -18,15 +18,12 @@ export interface Song {
 	duration?: number | null;
 	spotify?: string;
 	isrc?: string;
+	played?: string;
 }
 
 export interface Live extends Song {
 	started: number;
 	length: number;
-}
-
-export interface Played extends Song {
-	at: string;
 }
 
 export interface Artist {
@@ -44,8 +41,7 @@ export interface Top {
 export interface LiveData extends Top {
 	updated: string;
 	now: Live | null;
-	recent: Played[];
-	fresh: Song[];
+	enjoyed: Song[];
 }
 
 export interface ArtistData {

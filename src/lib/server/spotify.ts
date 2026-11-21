@@ -1,6 +1,6 @@
 import { error, isHttpError } from '@sveltejs/kit';
 import { SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REFRESH_TOKEN } from '$app/env/private';
-import type { Artist, ArtistData, Live, LiveData, Period, Played, Playlist, Song, Top } from '#lib/music';
+import type { Artist, ArtistData, Live, LiveData, Period, Playlist, Song, Top } from '#lib/music';
 import { norm, same_artist, song_key } from '#lib/match';
 import { artist_songs } from './previews';
 import { with_snapshot } from './snapshot';
@@ -148,21 +148,33 @@ const items = async (s: Source): Promise<any[]> => (await read(s)).value?.items 
 
 const top_songs = (r: any) => songs(r?.items).slice(0, 25);
 const top_artists = (r: any) => (r?.items ?? []).map(to_artist);
-const saved_songs = (r: any) => songs(r?.items, (x) => x.track);
 
-function played(r: any): Played[] {
-	const seen = new Set<string>();
-	const out: Played[] = [];
-	for (const item of r?.items ?? []) {
-		const song = to_song(item.track);
-		if (!song) continue;
-		const key = song_key(song);
-		if (seen.has(key)) continue;
-		seen.add(key);
-		out.push({ ...song, at: item.played_at });
-		if (out.length === 24) break;
+const ENJOYED = 12;
+
+function recently_enjoyed(recent: any, month: any, saved: any[]): Song[] {
+	const ranks = new Map<string, number>((month?.items ?? []).map((t: any, i: number) => [t.id, i]));
+	const liked = new Set(saved.map((x) => x?.track?.id).filter(Boolean));
+	const plays = new Map<string, { track: any; count: number; last: string }>();
+	for (const { track, played_at } of recent?.items ?? []) {
+		if (!track?.id) continue;
+		const seen = plays.get(track.id);
+		if (seen) seen.count++;
+		else plays.set(track.id, { track, count: 1, last: played_at });
 	}
-	return out;
+	const score = ({ track, count }: { track: any; count: number }) => {
+		const rank = ranks.get(track.id);
+		return count + (liked.has(track.id) ? 2 : 0) + (rank === undefined ? 0 : 2 - rank / 25);
+	};
+	return [...plays.values()]
+		.map((p) => ({ ...p, score: score(p) }))
+		.filter((p) => p.score >= 2)
+		.sort((a, b) => b.score - a.score)
+		.slice(0, ENJOYED)
+		.sort((a, b) => b.last.localeCompare(a.last))
+		.flatMap(({ track, last }) => {
+			const song = to_song(track);
+			return song ? [{ ...song, played: last }] : [];
+		});
 }
 
 async function get_top(period: Period): Promise<Top> {
@@ -175,15 +187,14 @@ async function get_live(): Promise<Omit<LiveData, 'now'>> {
 		read(source.tracks('short_term')),
 		read(source.artists('short_term')),
 		read(source.recent()),
-		read(source.saved(12)).catch(() => null)
+		read(source.saved(50))
 	]);
 	return {
 		period: 'short_term',
 		tracks: top_songs(tracks.value),
 		artists: top_artists(artists.value),
-		recent: played(recent.value),
-		fresh: saved ? saved_songs(saved.value) : [],
-		updated: new Date(Math.min(tracks.at, artists.at, recent.at, saved?.at ?? Infinity)).toISOString()
+		enjoyed: recently_enjoyed(recent.value, tracks.value, saved.value?.items ?? []),
+		updated: new Date(Math.min(tracks.at, artists.at, recent.at, saved.at)).toISOString()
 	};
 }
 
@@ -285,7 +296,7 @@ const unless_not_found = (e: unknown) => !isHttpError(e);
 export async function load_live(): Promise<LiveData> {
 	const now = get_now_playing().catch(() => null);
 	try {
-		const live = await with_snapshot('live', get_live, unless_not_found);
+		const live = await with_snapshot('live3', get_live, unless_not_found);
 		return { ...live, now: await now };
 	} catch (e) {
 		fail(e);
