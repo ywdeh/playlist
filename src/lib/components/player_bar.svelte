@@ -49,6 +49,7 @@
 	const HOLLOW_BLUR = 10;
 
 	function hollow(el: HTMLElement) {
+		if (matchMedia('(pointer: coarse)').matches) return;
 		const panel = el.parentElement!;
 		let frame = 0;
 		const draw = () => {
@@ -404,6 +405,11 @@
 	@media (prefers-reduced-motion: reduce) {
 		.wisp {
 			animation: none;
+		}
+	}
+	@media (pointer: coarse) {
+		.halo {
+			display: none;
 		}
 	}
 	.text {
