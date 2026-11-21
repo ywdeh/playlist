@@ -4,8 +4,6 @@ export interface QueueItem {
 	credits?: string;
 	image?: string | null;
 	album?: string | null;
-	duration?: number | null;
-	uri?: string;
 	isrc?: string;
 }
 
@@ -15,12 +13,4 @@ export interface Preview {
 	artist: string;
 	album: string;
 	cover: string | null;
-}
-
-export interface Loaded {
-	name: string;
-	artist: string;
-	album: string;
-	cover: string | null;
-	full: boolean;
 }

@@ -50,7 +50,7 @@
 		position: relative;
 		flex: none;
 		overflow: hidden;
-		--art-r: 8px;
+		--art-r: var(--r-xs);
 		border-radius: var(--art-r);
 		background: var(--surface-2);
 		aspect-ratio: 1;
@@ -63,7 +63,7 @@
 		height: 100%;
 		object-fit: cover;
 		opacity: 0;
-		transition: opacity 0.4s var(--ease);
+		transition: opacity var(--t-move) var(--ease);
 	}
 	img.loaded {
 		opacity: 1;

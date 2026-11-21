@@ -1,7 +1,8 @@
 <script lang="ts">
 	import Cover from './cover.svelte';
+	import Eq from './eq.svelte';
 	import { player } from '#lib/player.svelte';
-	import { cover_url, tint_on_hover } from '#lib/hover_tint.svelte';
+	import { cover_url, tint_on_hover } from '#lib/tint.svelte';
 	import { song_menu } from '#lib/menu.svelte';
 	import { length } from '#lib/format';
 	import { playable } from '#lib/playable.svelte';
@@ -36,7 +37,7 @@
 		class:muted
 		onclick={() => !muted && onplay()}
 		aria-disabled={muted}
-		title={muted ? 'Not available to play' : undefined}
+		title={muted ? 'not available to play' : undefined}
 		{@attach playable.watch(() => song)}
 		{@attach tint_on_hover(() => cover_url(image, artist, name))}
 		{@attach song_menu(() => ({ name, artist, play: onplay, spotify: song.spotify }))}
@@ -46,7 +47,7 @@
 				<svg viewBox="0 0 24 24" aria-hidden="true"
 					><path d="M12 20.3 10.9 19.3C6 14.9 2.9 12.1 2.9 8.6 2.9 5.9 5 3.8 7.7 3.8c1.6 0 3.2.8 4.3 2 1.1-1.2 2.7-2 4.3-2 2.7 0 4.8 2.1 4.8 4.8 0 3.5-3.1 6.3-8 10.7z" /></svg
 				>
-				<span class="tip" role="tooltip">One of my favourites</span>
+				<span class="tip" role="tooltip">one of my favourites</span>
 			</span>
 		{:else if rank !== undefined}
 			<span class="rank">{rank}</span>
@@ -59,7 +60,7 @@
 		<span class="album ellipsis">{album ?? ''}</span>
 		<span class="end">
 			{#if active && player.playing}
-				<span class="eq" aria-label="Playing"><i></i><i></i><i></i></span>
+				<Eq size={16} label="Playing" />
 			{:else}
 				<span>{end}</span>
 			{/if}
@@ -75,7 +76,7 @@
 		width: 100%;
 		height: 88px;
 		padding: 12px 14px;
-		border-radius: 18px;
+		border-radius: var(--r-lg);
 		--press-scale: 0.985;
 	}
 	@media (hover: hover) {
@@ -88,10 +89,10 @@
 		width: auto;
 	}
 	.row > * {
-		transition: opacity 0.4s var(--ease);
+		transition: opacity var(--t-move) var(--ease);
 	}
 	.muted > * {
-		opacity: 0.4;
+		opacity: var(--tone-off);
 	}
 	.muted {
 		cursor: default;
@@ -99,7 +100,7 @@
 	.rank {
 		width: 1.4em;
 		text-align: center;
-		font-weight: 600;
+		font-weight: var(--fw-strong);
 		color: var(--muted);
 		flex: none;
 		font-variant-numeric: tabular-nums;
@@ -126,21 +127,21 @@
 		gap: 2px;
 	}
 	.name {
-		font-size: 1.08em;
-		font-weight: 600;
+		font-size: var(--fs-lg);
+		font-weight: var(--fw-strong);
 	}
 	.active .name {
 		color: var(--accent);
 	}
 	.artist {
 		color: var(--muted);
-		font-size: 0.92em;
+		font-size: var(--fs-sm);
 	}
 	.album {
 		flex: 1 1 0;
 		min-width: 0;
 		color: var(--muted);
-		font-size: 0.92em;
+		font-size: var(--fs-sm);
 	}
 	.end {
 		flex: none;
@@ -148,37 +149,12 @@
 		display: flex;
 		justify-content: flex-end;
 		color: var(--muted);
-		font-size: 0.9em;
+		font-size: var(--fs-sm);
 		font-variant-numeric: tabular-nums;
 		white-space: nowrap;
 	}
-	.eq {
-		display: inline-flex;
-		align-items: flex-end;
-		gap: 3px;
-		height: 16px;
+	.end :global(.eq) {
 		margin-right: 4px;
-	}
-	.eq i {
-		width: 3px;
-		border-radius: 2px;
-		background: var(--accent);
-		animation: eq 0.9s var(--ease) infinite;
-	}
-	.eq i:nth-child(2) {
-		animation-delay: -0.3s;
-	}
-	.eq i:nth-child(3) {
-		animation-delay: -0.6s;
-	}
-	@keyframes eq {
-		0%,
-		100% {
-			height: 4px;
-		}
-		50% {
-			height: 16px;
-		}
 	}
 
 	@media (max-width: 720px) {
@@ -195,7 +171,7 @@
 			min-width: 2.6em;
 		}
 		.name {
-			font-size: 1em;
+			font-size: var(--fs-md);
 		}
 	}
 </style>

@@ -1,7 +1,6 @@
 import { SvelteMap } from 'svelte/reactivity';
 import type { Preview, QueueItem } from './player_types';
 import { song_key } from './match';
-import { spotify } from './spotify.svelte';
 
 type Found = Preview | null;
 
@@ -14,7 +13,6 @@ class Playable {
 	#running = 0;
 
 	state(song: QueueItem): 'yes' | 'no' | undefined {
-		if (spotify.ready && song.uri) return 'yes';
 		const found = this.#found.get(song_key(song));
 		if (found === undefined) return undefined;
 		return found ? 'yes' : 'no';

@@ -5,5 +5,6 @@
 	"assets": { "binding": "ASSETS" },
 	"observability": { "enabled": true },
 	"routes": [{ "pattern": "playlist.hedwy.art", "custom_domain": true }],
-	"vars": { "SPOTIFY_CLIENT_ID": "234b6d3a97434d32b91df5aa0b8eb6ef" }
+	"vars": { "SPOTIFY_CLIENT_ID": "234b6d3a97434d32b91df5aa0b8eb6ef" },
+	"kv_namespaces": [{ "binding": "SNAPSHOTS", "id": "90fb6a9ff0944a59b566b1cfd9e645d8" }]
 }

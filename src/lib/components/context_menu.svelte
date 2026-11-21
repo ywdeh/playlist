@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { fly } from 'svelte/transition';
+	import { ease, T_IN } from '#lib/motion';
 	import { close_menu, menu, spotify_link, type SpotifyTarget } from '#lib/menu.svelte';
 
 	let el = $state<HTMLElement>();
@@ -34,7 +36,13 @@
 	$effect(() => {
 		if (!menu.open) return;
 		addEventListener('scroll', close_menu, true);
-		return () => removeEventListener('scroll', close_menu, true);
+		addEventListener('wheel', close_menu, { passive: true });
+		document.addEventListener('visibilitychange', close_menu);
+		return () => {
+			removeEventListener('scroll', close_menu, true);
+			removeEventListener('wheel', close_menu);
+			document.removeEventListener('visibilitychange', close_menu);
+		};
 	});
 
 	function run(fn: () => void) {
@@ -42,13 +50,41 @@
 		fn();
 	}
 
+	const COPIED_MS = 650;
+	let copied = $state(false);
+
+	$effect(() => {
+		void menu.id;
+		copied = false;
+	});
+
+	async function copy() {
+		if (!menu.copy) return;
+		await navigator.clipboard.writeText(menu.copy).catch(() => {});
+		copied = true;
+		const id = menu.id;
+		setTimeout(() => menu.id === id && close_menu(), COPIED_MS);
+	}
+
+	function swallow(e: Event) {
+		e.preventDefault();
+		e.stopPropagation();
+	}
+
 	function outside(e: PointerEvent) {
-		if (menu.open && el && !el.contains(e.target as Node)) close_menu();
+		if (!menu.open || !el || el.contains(e.target as Node)) return;
+		close_menu();
+		if (e.button !== 0) return;
+		addEventListener('click', swallow, { capture: true, once: true });
+		addEventListener('pointerdown', () => removeEventListener('click', swallow, true), { capture: true, once: true });
 	}
 
 	function keys(e: KeyboardEvent) {
 		if (!menu.open || !el) return;
-		if (e.key === 'Escape') return close_menu();
+		if (e.key === 'Escape' || e.key === 'Tab') {
+			e.preventDefault();
+			return close_menu();
+		}
 		if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
 		e.preventDefault();
 		const buttons = [...el.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
@@ -67,6 +103,7 @@
 			role="menu"
 			tabindex="-1"
 			bind:this={el}
+			transition:fly|global={{ y: -4, duration: T_IN, easing: ease }}
 			style:left="{pos.x}px"
 			style:top="{pos.y}px"
 			oncontextmenu={(e) => e.preventDefault()}
@@ -74,6 +111,7 @@
 			{#each menu.items as item (item.label)}
 				<button role="menuitem" onclick={() => run(item.run)}>{item.label}</button>
 			{/each}
+			{#if menu.items.length && menu.spotify.length}<div class="gap" role="separator"></div>{/if}
 			{#each menu.spotify as item, i (item.label)}
 				{@const to = found[i]}
 				<button
@@ -85,6 +123,14 @@
 					{to && !to.exact ? item.search_label : item.label}
 				</button>
 			{/each}
+			{#if menu.copy}
+				<div class="gap" role="separator"></div>
+				<button role="menuitem" class="copy" class:copied onclick={copy}>
+					{#key copied}
+						<span class="swap">{copied ? 'copied' : 'copy name'}</span>
+					{/key}
+				</button>
+			{/if}
 		</div>
 	{/key}
 {/if}
@@ -96,26 +142,19 @@
 		display: grid;
 		min-width: 248px;
 		padding: 6px;
-		border-radius: 16px;
+		border-radius: var(--r-md);
 		background: var(--surface);
-		box-shadow: 0 18px 50px rgb(0 0 0 / 0.5);
-		animation: menu_in 0.2s var(--ease-ui);
+		box-shadow: 0 18px 50px var(--shadow);
 	}
 	.menu:focus {
 		outline: none;
 	}
-	@keyframes menu_in {
-		from {
-			opacity: 0;
-			translate: 0 -4px;
-		}
-	}
 	button {
 		height: 44px;
 		padding: 0 14px;
-		border-radius: 10px;
-		font-size: 0.92rem;
-		font-weight: 500;
+		border-radius: calc(var(--r-md) - 6px);
+		font-size: var(--fs-sm);
+		font-weight: var(--fw-ui);
 		transition:
 			background-color var(--t-in) var(--ease-ui),
 			color var(--t-out) var(--ease-ui);
@@ -125,9 +164,31 @@
 		background: var(--wash);
 		outline: none;
 	}
+	.gap {
+		height: var(--rule);
+		margin: 6px 10px;
+		border-radius: var(--rule);
+		background: var(--wash);
+	}
+	.copy.copied {
+		color: var(--accent);
+		background: var(--wash);
+	}
+	.swap {
+		display: inline-block;
+	}
+	.copied .swap {
+		animation: swap_in var(--t-out) var(--ease);
+	}
+	@keyframes swap_in {
+		from {
+			opacity: 0;
+			translate: 0 6px;
+		}
+	}
 	button.looking {
 		color: var(--muted);
-		opacity: 0.6;
+		opacity: var(--tone-off);
 		cursor: default;
 	}
 </style>

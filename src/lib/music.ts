@@ -2,9 +2,9 @@ export const PERIODS = ['short_term', 'medium_term', 'long_term'] as const;
 export type Period = (typeof PERIODS)[number];
 
 export const PERIOD_LABELS: Record<Period, string> = {
-	short_term: 'Month',
+	short_term: 'month',
 	medium_term: '6 months',
-	long_term: 'Year'
+	long_term: 'year'
 };
 
 export const is_period = (p: string | null): p is Period => PERIODS.includes(p as Period);
@@ -17,8 +17,12 @@ export interface Song {
 	album?: string | null;
 	duration?: number | null;
 	spotify?: string;
-	uri?: string;
 	isrc?: string;
+}
+
+export interface Live extends Song {
+	started: number;
+	length: number;
 }
 
 export interface Played extends Song {
@@ -39,7 +43,7 @@ export interface Top {
 
 export interface LiveData extends Top {
 	updated: string;
-	now: Song | null;
+	now: Live | null;
 	recent: Played[];
 	fresh: Song[];
 }

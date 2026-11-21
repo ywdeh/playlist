@@ -3,7 +3,7 @@
 	import Row from './row.svelte';
 	import type { ArtistData } from '#lib/music';
 	import { player } from '#lib/player.svelte';
-	import { cover_url, page_tint, tint_on_hover } from '#lib/hover_tint.svelte';
+	import { cover_url, page_tint, tint_on_hover } from '#lib/tint.svelte';
 	import { link } from '#lib/link';
 	import { artist_menu } from '#lib/menu.svelte';
 	import { reveal } from '#lib/reveal';
@@ -31,20 +31,21 @@
 
 <header>
 	<div
-		class="photo cascade"
-		style:--i={1}
+		class="identity"
 		{@attach tint_on_hover(() => photo)}
 		{@attach artist_menu(() => ({ artist: data.artist, spotify: data.spotify }))}
 	>
-		<Cover src={data.image} artist={data.artist} round />
+		<div class="photo cascade" style:--i={1}>
+			<Cover src={data.image} artist={data.artist} round />
+		</div>
+		<h1 class="cascade" style:--i={2}>{data.artist}</h1>
 	</div>
-	<h1 class="cascade" style:--i={2}>{data.artist}</h1>
 	{#if all.length}
 		<button class="play press cascade" style:--i={3} onclick={play_all} aria-label={show_pause ? 'Pause' : 'Play'}>
 			{#if show_pause}
-				<svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zm8 0h4v14h-4z" /></svg>
+				<svg viewBox="0 0 24 24"><path d="M5 3h5v18H5zm9 0h5v18h-5z" /></svg>
 			{:else}
-				<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+				<svg viewBox="0 0 24 24"><path d="M7 3v18l14-9z" /></svg>
 			{/if}
 		</button>
 	{/if}
@@ -67,7 +68,7 @@
 
 {#if data.popular.length}
 	<section {@attach reveal}>
-		<h2 class="cascade" style:--i={6 + data.yours.length}>Popular</h2>
+		<h2 class="cascade" style:--i={6 + data.yours.length}>popular</h2>
 		<ul class="list">
 			{#each data.popular as s, i (s.artist + s.name)}
 				<Row
@@ -95,8 +96,8 @@
 		box-shadow: inset 0 0 0 999px var(--wash);
 	}
 	.back svg {
-		width: 26px;
-		height: 26px;
+		width: 24px;
+		height: 24px;
 		fill: currentColor;
 	}
 	header {
@@ -106,6 +107,13 @@
 		margin: 24px 0 8px;
 		text-align: center;
 	}
+	.identity {
+		display: grid;
+		justify-items: center;
+		gap: 22px;
+		user-select: none;
+		-webkit-user-select: none;
+	}
 	.photo {
 		width: clamp(180px, 40vw, 260px);
 	}
@@ -113,10 +121,6 @@
 		width: 100%;
 	}
 	h1 {
-		font-size: clamp(2.4rem, 8vw, 3.6rem);
-		font-weight: 600;
-		letter-spacing: -0.025em;
-		line-height: 1.05;
 		overflow-wrap: anywhere;
 	}
 	.play {
@@ -130,8 +134,8 @@
 		color: var(--accent-ink);
 	}
 	.play svg {
-		width: 30px;
-		height: 30px;
+		width: 24px;
+		height: 24px;
 		fill: currentColor;
 	}
 	section {
@@ -141,10 +145,6 @@
 		margin-top: var(--section-gap);
 	}
 	h2 {
-		font-size: 1.5rem;
-		font-weight: 650;
-		letter-spacing: -0.02em;
-		line-height: 1.2;
 		margin: 0 0 26px;
 	}
 	.list {

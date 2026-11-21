@@ -1,17 +1,20 @@
 <script lang="ts">
-	import { tick } from 'svelte';
 	import Cover from './cover.svelte';
 	import Row from './row.svelte';
+	import MoreList from './more_list.svelte';
 	import Shelf from './shelf.svelte';
 	import NowPlaying from './now_playing.svelte';
 	import { PERIODS, PERIOD_LABELS, type LiveData, type Period, type Playlist, type Top } from '#lib/music';
 	import { player } from '#lib/player.svelte';
 	import { playable } from '#lib/playable.svelte';
-	import { cover_url, tint_on_hover } from '#lib/hover_tint.svelte';
+	import { cover_url, tint_on_hover } from '#lib/tint.svelte';
 	import { link } from '#lib/link';
 	import { artist_menu, artist_path, song_menu } from '#lib/menu.svelte';
 	import { reveal } from '#lib/reveal';
+	import { flip } from '#lib/flip.svelte';
 	import { ago, length } from '#lib/format';
+	import { invalidateAll } from '$app/navigation';
+	import { clock, every, STATS_EVERY_MS } from '#lib/live.svelte';
 
 	let {
 		data,
@@ -24,32 +27,24 @@
 	const song_key = (s: { artist: string; name: string }) => `${s.artist}\u0000${s.name}`.toLowerCase();
 	const pinned_keys = $derived(new Set(pinned.map(song_key)));
 	const shift = $derived(Math.min(pinned.length, 10));
-	let now = $state(Date.now());
-	$effect(() => {
-		const id = setInterval(() => (now = Date.now()), 30_000);
-		return () => clearInterval(id);
-	});
-
-	let show_all = $state(false);
-	const recent = $derived(data.recent.slice(0, 15));
+	const recent = $derived(data.recent.slice(0, 24));
 
 	let picked = $state<Top | null>(null);
 	let pending = $state<Period | null>(null);
 	const top = $derived<Top>(picked ?? data);
 	const ranked = $derived(top.tracks.filter((t) => !pinned_keys.has(song_key(t))));
-	const songs = $derived(show_all ? ranked : ranked.slice(0, 10));
-	const queue = $derived([...pinned, ...ranked]);
+	const queue = $derived([...ranked, ...pinned]);
+
 	const shown = $derived(pending ?? top.period);
 	const loaded = new Map<Period, Top>();
 	let request = 0;
 
-	async function toggle_all(e: MouseEvent) {
-		const button = e.currentTarget as HTMLElement;
-		const before = button.getBoundingClientRect().top;
-		show_all = !show_all;
-		if (show_all) return;
-		await tick();
-		window.scrollBy({ top: button.getBoundingClientRect().top - before, behavior: 'instant' });
+	async function fetch_top(p: Period): Promise<Top> {
+		const res = await fetch(`/api/top?period=${p}`);
+		if (!res.ok) throw new Error(res.statusText);
+		const next = (await res.json()) as Top;
+		loaded.set(p, next);
+		return next;
 	}
 
 	async function pick(p: Period) {
@@ -57,30 +52,30 @@
 		const id = ++request;
 		pending = p;
 		try {
-			let next = loaded.get(p);
-			if (!next) {
-				const res = await fetch(`/api/top?period=${p}`);
-				if (!res.ok) throw new Error();
-				next = (await res.json()) as Top;
-				loaded.set(p, next);
-			}
-			if (id !== request) return;
-			show_all = false;
-			picked = next;
+			const next = loaded.get(p) ?? (await fetch_top(p));
+			if (id === request) picked = next;
 		} catch {
 		} finally {
 			if (id === request) pending = null;
 		}
 	}
+
+	every(STATS_EVERY_MS, async () => {
+		loaded.clear();
+		await invalidateAll();
+		const p = picked?.period;
+		if (p) picked = await fetch_top(p).catch(() => picked);
+	});
 </script>
 
 <div class="title cascade" style:--i={0}>
 	<h1>{title}</h1>
 	<button type="button" class="updated tip_anchor" aria-label="About this page" aria-describedby="about_page">
-		<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 11v5.5M12 7.6v.1" /></svg>
+		<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /><path d="M12 11v5M12 8h.01" /></svg>
 		<span class="tip end wide below" role="tooltip" id="about_page">
-			<strong>Updated {ago(data.updated, now)}</strong>
-			<span>Straight from my Spotify, with previews from Deezer and iTunes.</span>		</span>
+			<strong>updated {ago(data.updated, clock.now)}</strong>
+			<span>straight from my spotify, with previews from deezer and itunes</span>
+		</span>
 	</button>
 </div>
 
@@ -94,42 +89,37 @@
 
 <nav class="periods cascade" style:--i={2} aria-label="Time range">
 	{#each PERIODS as p (p)}
-		<button class="press" aria-pressed={shown === p} onclick={() => pick(p)}>{PERIOD_LABELS[p]}</button>
+		<button class="pill press" aria-pressed={shown === p} onclick={() => pick(p)}>{PERIOD_LABELS[p]}</button>
 	{/each}
 </nav>
 
 {#key top.period}
 	<section class="block first" {@attach reveal}>
-		<h2 class="cascade" style:--i={3}>Top songs</h2>
+		<h2 class="cascade" style:--i={3}>top songs</h2>
 		{#if queue.length}
-			<ol class="list">
-				{#each pinned as s, i (s.spotify)}
-					<Row
-						song={s}
-						pinned
-						order={4 + i}
-						onplay={() => player.play(queue, i)}
-					/>
-				{/each}
-				{#each songs as t, i (t.artist + t.name)}
-					<Row
-						song={t}
-						rank={i + 1}
-						order={4 + shift + (i % 10)}
-						onplay={() => player.play(queue, pinned.length + i)}
-					/>
-				{/each}
-			</ol>
-			{#if ranked.length > 10}
-				<button class="more press cascade" style:--i={14 + shift} onclick={toggle_all}>{show_all ? 'Show less' : 'Show more'}</button>
+			{#if ranked.length}
+				<MoreList total={ranked.length} order={13}>
+					<ol class="list" {@attach flip(() => ranked)}>
+						{#each ranked as t, i (t.artist + t.name)}
+							<Row song={t} rank={i + 1} order={4 + Math.min(i, 9)} onplay={() => player.play(queue, i)} />
+						{/each}
+					</ol>
+				</MoreList>
+			{/if}
+			{#if pinned.length}
+				<ul class="list favourites">
+					{#each pinned as s, i (s.spotify)}
+						<Row song={s} pinned order={14 + i} onplay={() => player.play(queue, ranked.length + i)} />
+					{/each}
+				</ul>
 			{/if}
 		{:else}
-			<p class="empty">Nothing played in this time yet.</p>
+			<p class="empty">nothing played in this time yet</p>
 		{/if}
 	</section>
 
 	{#if top.artists.length}
-		<Shelf title="Top artists" order={15 + shift}>
+		<Shelf title="top artists" order={15 + shift}>
 			{#each top.artists as a (a.name)}
 				<div
 					class="item artist press"
@@ -148,7 +138,7 @@
 {/key}
 
 {#if data.fresh.length}
-	<Shelf title="New" order={16 + shift}>
+	<Shelf title="new" order={16 + shift}>
 		{#each data.fresh as s, i (s.artist + s.name)}
 			<button
 					class="item tile press"
@@ -172,17 +162,14 @@
 
 {#if recent.length}
 	<section class="block cascade" style:--i={17 + shift} {@attach reveal}>
-		<h2>Recently played</h2>
-		<ul class="list">
-			{#each recent as r, i (r.at + r.name)}
-				<Row
-					song={r}
-					order={18 + shift + i}
-					meta={ago(r.at)}
-					onplay={() => player.play(recent, i)}
-				/>
-			{/each}
-		</ul>
+		<h2>recently played</h2>
+		<MoreList total={recent.length} order={27 + shift}>
+			<ul class="list" {@attach flip(() => recent)}>
+				{#each recent as r, i (r.at + r.name)}
+					<Row song={r} order={18 + shift + Math.min(i, 9)} meta={ago(r.at, clock.now)} onplay={() => player.play(recent, i)} />
+				{/each}
+			</ul>
+		</MoreList>
 	</section>
 {/if}
 
@@ -195,23 +182,20 @@
 		margin: 24px 0 40px;
 	}
 	h1 {
-		font-size: clamp(2.6rem, 10vw, 3.8rem);
-		font-weight: 600;
-		letter-spacing: -0.025em;
 		line-height: 1;
 	}
 	.intro {
 		max-width: 34em;
 		margin: -16px 0 44px;
 		color: var(--muted);
-		font-size: 1.05rem;
+		font-size: var(--fs-lg);
 		line-height: 1.6;
 		text-wrap: pretty;
 	}
 	@media (max-width: 520px) {
 		.intro {
 			margin: -12px 0 32px;
-			font-size: 1rem;
+			font-size: var(--fs-md);
 		}
 	}
 	.updated {
@@ -225,12 +209,12 @@
 		cursor: default;
 	}
 	.updated strong {
-		font-weight: 600;
-		font-size: 1.05em;
+		font-weight: var(--fw-strong);
+		font-size: var(--fs-sm);
 	}
 	.updated svg {
-		width: 22px;
-		height: 22px;
+		width: 24px;
+		height: 24px;
 		fill: none;
 		stroke: currentColor;
 		stroke-linecap: round;
@@ -241,10 +225,6 @@
 		vector-effect: non-scaling-stroke;
 	}
 	h2 {
-		font-size: 1.5rem;
-		font-weight: 650;
-		letter-spacing: -0.02em;
-		line-height: 1.2;
 		margin: 0 0 26px;
 	}
 	.block {
@@ -261,28 +241,6 @@
 		overflow-x: auto;
 		scrollbar-width: none;
 	}
-	.periods button,
-	.more {
-		display: inline-grid;
-		place-items: center;
-		flex: none;
-		height: 48px;
-		padding: 0 24px;
-		border-radius: 999px;
-		--press-scale: 0.94;
-		background: var(--surface);
-		font-weight: 600;
-		font-size: 0.95rem;
-		text-decoration: none;
-	}
-	.periods button:hover:not([aria-pressed='true']),
-	.more:hover {
-		box-shadow: inset 0 0 0 999px var(--wash);
-	}
-	.periods button[aria-pressed='true'] {
-		background: var(--accent);
-		color: var(--accent-ink);
-	}
 	@media (max-width: 520px) {
 		.periods {
 			gap: 8px;
@@ -293,7 +251,6 @@
 			min-width: 0;
 			height: 44px;
 			padding: 0 8px;
-			font-size: 0.88rem;
 		}
 		.title {
 			margin: 8px 0 32px;
@@ -306,8 +263,8 @@
 		margin: 0 -14px;
 		padding: 0;
 	}
-	.more {
-		margin-top: 22px;
+	.favourites {
+		margin-top: 48px;
 	}
 	.empty {
 		color: var(--muted);
@@ -328,18 +285,18 @@
 		margin-bottom: 12px;
 	}
 	.tile :global(.art) {
-		--art-r: 16px;
+		--art-r: var(--r-md);
 	}
 	.label {
-		font-weight: 600;
-		font-size: 1.04em;
+		font-weight: var(--fw-strong);
+		font-size: var(--fs-lg);
 		line-height: 26px;
 	}
 	.tile > * {
-		transition: opacity 0.4s var(--ease);
+		transition: opacity var(--t-move) var(--ease);
 	}
 	.tile.muted > * {
-		opacity: 0.4;
+		opacity: var(--tone-off);
 	}
 	.tile.active .label {
 		color: var(--accent);
@@ -354,7 +311,7 @@
 		gap: 10px;
 		min-width: 0;
 		color: var(--muted);
-		font-size: 0.9em;
+		font-size: var(--fs-sm);
 		line-height: 22px;
 	}
 </style>

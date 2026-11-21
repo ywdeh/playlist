@@ -1,6 +1,6 @@
 import { error, redirect } from '@sveltejs/kit';
 import { dev } from '$app/env';
-import { SPOTIFY_CLIENT_ID } from '$app/env/public';
+import { SPOTIFY_CLIENT_ID } from '$app/env/private';
 import { OWNER_SCOPES } from '#lib/server/spotify';
 import type { RequestHandler } from './$types';
 

@@ -1,54 +1,91 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { fade } from 'svelte/transition';
+	import { EASE_CSS, T_IN, T_MOVE, T_OUT } from '#lib/motion';
 	import Cover from './cover.svelte';
-	import type { Song } from '#lib/music';
+	import Eq from './eq.svelte';
+	import type { Live } from '#lib/music';
 	import { player } from '#lib/player.svelte';
-	import { cover_url, tint_on_hover } from '#lib/hover_tint.svelte';
+	import { cover_url, live_tint, tint_on_hover } from '#lib/tint.svelte';
 	import { song_menu } from '#lib/menu.svelte';
+	import { length } from '#lib/format';
+	import { clock, every, NOW_EVERY_MS } from '#lib/live.svelte';
 
-	let { initial }: { initial: Song | null } = $props();
+	let { initial }: { initial: Live | null } = $props();
 
-	let latest = $state<Song | null | undefined>(undefined);
-	const shown = $derived(latest === undefined ? initial : latest);
-	const track = $derived(shown ?? null);
+	let track = $derived(initial);
+	live_tint(() => (track ? cover_url(track.image, track.artist, track.name) : null));
 
-	onMount(() => {
-		const tick = async () => {
-			if (document.hidden) return;
-			try {
-				const res = await fetch('/api/now');
-				if (res.ok) latest = await res.json();
-			} catch {}
-		};
-		const id = setInterval(tick, 20_000);
-		document.addEventListener('visibilitychange', tick);
-		return () => {
-			clearInterval(id);
-			document.removeEventListener('visibilitychange', tick);
-		};
+	every(NOW_EVERY_MS, async () => {
+		const res = await fetch('/api/now').catch(() => null);
+		if (res?.ok) track = await res.json();
 	});
+
+	let anchor = 0;
+	const started = $derived.by(() => {
+		const at = track?.started ?? 0;
+		if (Math.abs(at - anchor) > 2000) anchor = at;
+		return anchor;
+	});
+
+	const elapsed = $derived(track?.length ? Math.min(Math.max(clock.now - started, 0), track.length) : 0);
+
+	const GLIDE_MS = T_MOVE;
+	let shown: { el: HTMLElement; done: number } | null = null;
+
+	const clip = (done: number) => `inset(0 ${(1 - done) * 100}% 0 0 round var(--bar))`;
+	const read_done = (el: HTMLElement) => 1 - parseFloat(getComputedStyle(el).clipPath.split(' ')[1] ?? '100') / 100;
+
+	function progress(el: HTMLElement) {
+		const length = track?.length ?? 0;
+		if (!length || !started) return;
+		const left = Math.max(length - (Date.now() - started), 0);
+		const done = 1 - left / length;
+		const glide = Math.min(GLIDE_MS / Math.max(left, 1), 1);
+		const from = shown?.el === el ? shown.done : done;
+		const motion = el.animate(
+			[
+				{ clipPath: clip(from), easing: EASE_CSS },
+				{ clipPath: clip(Math.min(done + GLIDE_MS / length, 1)), offset: glide, easing: 'linear' },
+				{ clipPath: clip(1) }
+			],
+			{ duration: left, fill: 'forwards' }
+		);
+		return () => {
+			shown = { el, done: read_done(el) };
+			motion.cancel();
+		};
+	}
 </script>
 
 {#if track}
-	<section transition:fade={{ duration: 400 }}>
-		{#key track.artist + track.name}
+	{@const song = track}
+	<section transition:fade={{ duration: T_MOVE }}>
+		{#key song.artist + song.name}
 			<button
 				class="now press"
-				onclick={() => player.play([track], 0)}
-				{@attach tint_on_hover(() => cover_url(track.image, track.artist, track.name))}
+				in:fade={{ duration: T_MOVE, delay: T_IN }}
+				out:fade={{ duration: T_OUT }}
+				onclick={() => player.play([song], 0)}
+				{@attach tint_on_hover(() => cover_url(song.image, song.artist, song.name))}
 				{@attach song_menu(() => ({
-					name: track.name,
-					artist: track.artist,
-					spotify: track.spotify,
-					play: () => player.play([track], 0)
+					name: song.name,
+					artist: song.artist,
+					spotify: song.spotify,
+					play: () => player.play([song], 0)
 				}))}
 			>
-				<Cover src={track.image} artist={track.artist} name={track.name} />
+				<Cover src={song.image} artist={song.artist} name={song.name} />
 				<div class="text">
-					<span class="label"><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>Playing now</span>
-					<strong class="title">{track.name}</strong>
-					<span class="artist ellipsis">{track.credits ?? track.artist}</span>
+					<span class="label"><Eq size={13} />i'm listening to</span>
+					<strong class="title ellipsis">{song.name}</strong>
+					<span class="artist ellipsis">{song.credits ?? song.artist}</span>
+					{#if song.length}
+						<span class="seek" aria-hidden="true">
+							<span class="time">{length(elapsed / 1000)}</span>
+							<span class="bar"><span class="fill" {@attach progress}></span></span>
+							<span class="time">{length(song.length / 1000)}</span>
+						</span>
+					{/if}
 				</div>
 			</button>
 		{/key}
@@ -56,16 +93,19 @@
 {/if}
 
 <style>
+	section {
+		display: grid;
+	}
 	.now {
+		grid-area: 1 / 1;
 		display: flex;
 		align-items: center;
 		gap: 24px;
 		width: calc(100% + 28px);
 		margin: 0 -14px;
 		padding: 14px;
-		border-radius: 22px;
+		border-radius: var(--r-lg);
 		--press-scale: 0.985;
-		animation: appear 0.5s var(--ease);
 	}
 	@media (hover: hover) {
 		.now:hover {
@@ -75,9 +115,10 @@
 	.now :global(.art) {
 		flex: none;
 		width: 112px;
-		--art-r: 14px;
+		--art-r: var(--r-md);
 	}
 	.text {
+		flex: 1;
 		display: grid;
 		gap: 4px;
 		min-width: 0;
@@ -87,55 +128,45 @@
 		align-items: center;
 		gap: 8px;
 		margin-bottom: 2px;
-		font-size: 0.9rem;
-		font-weight: 600;
+		font-size: var(--fs-sm);
+		font-weight: var(--fw-strong);
 		color: var(--accent);
 	}
 	.title {
-		font-size: 1.5rem;
-		font-weight: 650;
+		font-size: var(--fs-xl);
+		font-weight: var(--fw-heading);
 		letter-spacing: -0.02em;
-		line-height: 1.2;
-		display: -webkit-box;
-		-webkit-line-clamp: 2;
-		line-clamp: 2;
-		-webkit-box-orient: vertical;
-		overflow: hidden;
+		line-height: 1.3;
 	}
 	.artist {
 		color: var(--muted);
 	}
-	.eq {
-		display: inline-flex;
-		align-items: flex-end;
-		gap: 2px;
-		height: 12px;
+	.seek {
+		display: flex;
+		align-items: center;
+		gap: 14px;
+		margin-top: 10px;
 	}
-	.eq i {
-		width: 3px;
-		border-radius: 2px;
+	.time {
+		min-width: 2.6em;
+		color: var(--muted);
+		font-size: var(--fs-xs);
+		font-variant-numeric: tabular-nums;
+	}
+	.time:last-child {
+		text-align: right;
+	}
+	.bar {
+		flex: 1;
+		height: var(--bar);
+		border-radius: var(--bar);
+		background: var(--tint);
+	}
+	.fill {
+		display: block;
+		height: 100%;
 		background: var(--accent);
-		animation: eq 0.9s var(--ease) infinite;
-	}
-	.eq i:nth-child(2) {
-		animation-delay: -0.3s;
-	}
-	.eq i:nth-child(3) {
-		animation-delay: -0.6s;
-	}
-	@keyframes eq {
-		0%,
-		100% {
-			height: 3px;
-		}
-		50% {
-			height: 12px;
-		}
-	}
-	@keyframes appear {
-		from {
-			opacity: 0;
-		}
+		clip-path: inset(0 100% 0 0 round var(--bar));
 	}
 	@media (max-width: 520px) {
 		.now {

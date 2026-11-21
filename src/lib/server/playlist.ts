@@ -24,13 +24,12 @@ async function read_embed(id: string): Promise<Playlist> {
 				artist: String(t.subtitle ?? '').split(/,\s*/)[0],
 				image: null,
 				duration: t.duration ? Math.round(t.duration / 1000) : null,
-				spotify: `https://open.spotify.com/track/${track_id}`,
-				uri: `spotify:track:${track_id}`
+				spotify: `https://open.spotify.com/track/${track_id}`
 			};
 		});
 
 	return {
-		name: String(entity.name ?? 'Playlist'),
+		name: String(entity.name ?? 'playlist'),
 		image: biggest(entity.visualIdentity?.image ?? entity.coverArt?.sources),
 		url: `https://open.spotify.com/playlist/${id}`,
 		songs

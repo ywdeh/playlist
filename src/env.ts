@@ -5,7 +5,6 @@ const optional = (value: string | undefined) => value?.trim() || undefined;
 export const variables = defineEnvVars({
 	SPOTIFY_CLIENT_ID: {
 		description: 'Client ID of the Spotify app (developer.spotify.com/dashboard).',
-		public: true,
 		schema: optional
 	},
 	SPOTIFY_CLIENT_SECRET: {

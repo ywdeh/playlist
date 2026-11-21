@@ -17,10 +17,6 @@
 		margin-top: var(--section-gap);
 	}
 	h2 {
-		font-size: 1.5rem;
-		font-weight: 650;
-		letter-spacing: -0.02em;
-		line-height: 1.2;
 		margin: 0 0 12px;
 	}
 	.ways {
@@ -30,7 +26,7 @@
 	}
 	.way {
 		color: var(--muted);
-		font-weight: 500;
+		font-weight: var(--fw-ui);
 		--press-scale: 0.97;
 		cursor: pointer;
 	}

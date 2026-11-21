@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { ease, T_MOVE, T_OUT } from '#lib/motion';
 	import type { Snippet } from 'svelte';
 	import { reveal } from '#lib/reveal';
 
@@ -54,7 +55,7 @@
 			if (Math.abs(scroller.scrollLeft - written) > 2) return stop();
 			if (start < 0) start = now;
 			const t = Math.min(1, Math.max(0, (now - start) / duration));
-			scroller.scrollLeft = from + (target - from) * (1 - Math.pow(1 - t, 3));
+			scroller.scrollLeft = from + (target - from) * ease(t);
 			written = scroller.scrollLeft;
 			if (t < 1) frame = requestAnimationFrame(step);
 			else stop();
@@ -64,7 +65,7 @@
 
 	function page(dir: 1 | -1) {
 		const target = nearest(scroller.scrollLeft + dir * scroller.clientWidth * 0.8);
-		glide_to(target, 520);
+		glide_to(target, T_MOVE);
 	}
 
 	function drag(el: HTMLDivElement) {
@@ -110,7 +111,7 @@
 			if (!down) return;
 			down = dragging = holding = false;
 			el.classList.remove('dragging');
-			if (!moved) return glide_to(nearest(el.scrollLeft), 300);
+			if (!moved) return glide_to(nearest(el.scrollLeft), T_OUT);
 			const v = e.timeStamp - last_t > 80 ? 0 : velocity;
 			const target = nearest(el.scrollLeft + v * 220);
 			const dist = Math.abs(target - el.scrollLeft);
@@ -181,12 +182,6 @@
 		gap: 16px;
 		margin-bottom: 26px;
 	}
-	h2 {
-		font-size: 1.5rem;
-		font-weight: 650;
-		letter-spacing: -0.02em;
-		line-height: 1.2;
-	}
 	.arrows {
 		display: none;
 		gap: 8px;
@@ -212,12 +207,12 @@
 		scale: none;
 	}
 	.arrow:disabled {
-		opacity: 0.35;
+		opacity: var(--tone-off);
 		cursor: default;
 	}
 	.arrow svg {
-		width: 22px;
-		height: 22px;
+		width: 24px;
+		height: 24px;
 		fill: currentColor;
 	}
 	.shelf {

@@ -4,11 +4,10 @@
 	import PlayerBar from '#lib/components/player_bar.svelte';
 	import ContextMenu from '#lib/components/context_menu.svelte';
 	import Footer from '#lib/components/footer.svelte';
-
-	import { page } from '$app/state';
+	import { tint_root } from '#lib/tint.svelte';
 
 	let { children } = $props();
-	const bare = $derived(page.route.id === '/listen');
+	tint_root();
 </script>
 
 <svelte:head>
@@ -17,13 +16,11 @@
 
 <main>
 	{@render children()}
-	{#if !bare}<Footer />{/if}
+	<Footer />
 </main>
 
-{#if !bare}
-	<PlayerBar />
-	<ContextMenu />
-{/if}
+<PlayerBar />
+<ContextMenu />
 
 <div class="grain" aria-hidden="true"></div>
 

@@ -21,6 +21,7 @@ class Menu {
 	y = $state(0);
 	items = $state.raw<MenuItem[]>([]);
 	spotify = $state.raw<SpotifyItem[]>([]);
+	copy = $state<string | null>(null);
 }
 export const menu = new Menu();
 
@@ -31,16 +32,23 @@ export function close_menu() {
 const HOLD_MS = 450;
 const HOLD_SLOP = 10;
 
-export function context_menu(build: () => { items: MenuItem[]; spotify: SpotifyItem[] }) {
+interface MenuParts {
+	items: MenuItem[];
+	spotify: SpotifyItem[];
+	copy: string;
+}
+
+export function context_menu(build: () => MenuParts) {
 	return (el: HTMLElement) => {
 		let held_at = 0;
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		let start = { x: 0, y: 0 };
 
 		const show = (x: number, y: number) => {
-			const { items, spotify } = build();
+			const { items, spotify, copy } = build();
 			menu.items = items;
 			menu.spotify = spotify;
+			menu.copy = copy;
 			menu.x = x;
 			menu.y = y;
 			menu.id++;
@@ -106,14 +114,15 @@ const on_artist_page = (artist: string) => decodeURIComponent(page.url.pathname)
 export function song_menu(song: () => { name: string; artist: string; play: () => void; spotify?: string }) {
 	return context_menu(() => {
 		const { name, artist, play, spotify } = song();
-		const items: MenuItem[] = [{ label: 'Play', run: play }];
-		if (!on_artist_page(artist)) items.push({ label: 'Go to artist', run: () => goto(artist_path(artist)) });
+		const items: MenuItem[] = [{ label: 'play', run: play }];
+		if (!on_artist_page(artist)) items.push({ label: 'go to artist', run: () => goto(artist_path(artist)) });
 		return {
 			items,
 			spotify: [
-				{ label: 'Open in Spotify', search_label: 'Search on Spotify', artist, name, url: spotify },
-				{ label: 'Open artist in Spotify', search_label: 'Search artist on Spotify', artist }
-			]
+				{ label: 'open in spotify', search_label: 'search on spotify', artist, name, url: spotify },
+				{ label: 'open artist in spotify', search_label: 'search artist on spotify', artist }
+			],
+			copy: `${name} by ${artist}`
 		};
 	});
 }
@@ -121,8 +130,8 @@ export function song_menu(song: () => { name: string; artist: string; play: () =
 export function artist_menu(target: () => { artist: string; spotify?: string }) {
 	return context_menu(() => {
 		const { artist, spotify } = target();
-		const items: MenuItem[] = on_artist_page(artist) ? [] : [{ label: 'Open artist', run: () => goto(artist_path(artist)) }];
-		return { items, spotify: [{ label: 'Open in Spotify', search_label: 'Search on Spotify', artist, url: spotify }] };
+		const items: MenuItem[] = on_artist_page(artist) ? [] : [{ label: 'open artist', run: () => goto(artist_path(artist)) }];
+		return { items, spotify: [{ label: 'open in spotify', search_label: 'search on spotify', artist, url: spotify }], copy: artist };
 	});
 }
 

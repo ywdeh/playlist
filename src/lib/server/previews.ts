@@ -31,7 +31,7 @@ async function deezer_slot() {
 async function get_json(url: string, user_agent = 'music-stats-site/1.0'): Promise<any> {
 	const host = new URL(url).host;
 	if (host === 'api.deezer.com') await deezer_slot();
-	const res = await fetch(url, { headers: { 'User-Agent': user_agent, Accept: 'application/json' } });
+	const res = await fetch(url, { headers: { 'User-Agent': user_agent, Accept: 'application/json', 'Accept-Language': 'en' } });
 	if (!res.ok) throw new Error(`${host} ${res.status}`);
 	const json = await res.json();
 	if (host === 'api.deezer.com' && json?.error) throw new Error(`deezer ${json.error.code ?? 'error'}`);

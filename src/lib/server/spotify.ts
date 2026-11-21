@@ -1,9 +1,9 @@
 import { error, isHttpError } from '@sveltejs/kit';
-import { SPOTIFY_CLIENT_ID } from '$app/env/public';
-import { SPOTIFY_CLIENT_SECRET, SPOTIFY_REFRESH_TOKEN } from '$app/env/private';
-import type { Artist, ArtistData, LiveData, Period, Played, Playlist, Song, Top } from '#lib/music';
+import { SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REFRESH_TOKEN } from '$app/env/private';
+import type { Artist, ArtistData, Live, LiveData, Period, Played, Playlist, Song, Top } from '#lib/music';
 import { norm, same_artist, song_key } from '#lib/match';
 import { artist_songs } from './previews';
+import { with_snapshot } from './snapshot';
 
 const API = 'https://api.spotify.com/v1';
 const ACCOUNTS = 'https://accounts.spotify.com';
@@ -50,8 +50,22 @@ function access_token(): Promise<string> {
 	return pending_token;
 }
 
-const memory = new Map<string, { expires: number; value: unknown }>();
-const inflight = new Map<string, Promise<unknown>>();
+const TTL = {
+	now: 4,
+	recent: 60,
+	saved: 300,
+	month: 600,
+	top: 3600,
+	artist: 86400,
+	playlist: 900
+} as const;
+
+const period_ttl = (period: Period) => (period === 'short_term' ? TTL.month : TTL.top);
+
+type Entry = { at: number; value: any };
+
+const memory = new Map<string, Entry & { expires: number }>();
+const inflight = new Map<string, Promise<Entry>>();
 
 async function fetch_api(path: string, retry = true): Promise<any> {
 	const res = await fetch(`${API}${path}`, { headers: { Authorization: `Bearer ${await access_token()}` } });
@@ -65,30 +79,32 @@ async function fetch_api(path: string, retry = true): Promise<any> {
 	return json;
 }
 
-function call(path: string, ttl_seconds: number): Promise<any> {
-	const key = `https://spotify.cache${path}`;
+function cached_entry(path: string, ttl_seconds: number): Promise<Entry> {
+	const key = `https://spotify.cache/v2${path}`;
 	const hit = memory.get(key);
-	if (hit && hit.expires > Date.now()) return Promise.resolve(hit.value);
+	if (hit && hit.expires > Date.now()) return Promise.resolve(hit);
 	const running = inflight.get(key);
 	if (running) return running;
 
 	const promise = (async () => {
 		const edge = (globalThis as { caches?: { default?: Cache } }).caches?.default;
-		const cached = edge ? await edge.match(key).catch(() => undefined) : undefined;
-		const value = cached ? await cached.json() : await fetch_api(path);
-		memory.set(key, { expires: Date.now() + ttl_seconds * 1000, value });
+		const stored = edge ? await edge.match(key).catch(() => undefined) : undefined;
+		const entry: Entry = stored ? await stored.json() : { at: Date.now(), value: await fetch_api(path) };
+		memory.set(key, { ...entry, expires: entry.at + ttl_seconds * 1000 });
 		if (memory.size > 500) memory.delete(memory.keys().next().value!);
-		if (edge && !cached) {
+		if (edge && !stored) {
 			await edge
-				.put(key, new Response(JSON.stringify(value), { headers: { 'Cache-Control': `max-age=${ttl_seconds}` } }))
+				.put(key, new Response(JSON.stringify(entry), { headers: { 'Cache-Control': `max-age=${ttl_seconds}` } }))
 				.catch(() => {});
 		}
-		return value;
+		return entry;
 	})().finally(() => inflight.delete(key));
 
 	inflight.set(key, promise);
 	return promise;
 }
+
+const call = async (path: string, ttl_seconds: number) => (await cached_entry(path, ttl_seconds)).value;
 
 type Image = { url: string; width?: number | null };
 
@@ -109,7 +125,6 @@ function to_song(t: any): Song | null {
 		album: t.album?.name || null,
 		duration: t.duration_ms ? Math.round(t.duration_ms / 1000) : null,
 		spotify: t.external_urls?.spotify,
-		uri: t.uri,
 		isrc: t.external_ids?.isrc
 	};
 }
@@ -119,23 +134,23 @@ const to_artist = (a: any): Artist => ({ name: a.name, image: image(a.images, 32
 const songs = (items: any[] | undefined, pick: (x: any) => any = (x) => x) =>
 	(items ?? []).map((x) => to_song(pick(x))).filter((s): s is Song => !!s);
 
-async function raw_tracks(period: Period, limit = 50): Promise<any[]> {
-	const r = await call(`/me/top/tracks?time_range=${period}&limit=${limit}`, period === 'short_term' ? 900 : 3600);
-	return r?.items ?? [];
-}
+type Source = readonly [path: string, ttl: number];
 
-async function get_top(period: Period): Promise<Top> {
-	const ttl = period === 'short_term' ? 900 : 3600;
-	const [tracks, artists] = await Promise.all([raw_tracks(period), call(`/me/top/artists?time_range=${period}&limit=20`, ttl)]);
-	return {
-		period,
-		tracks: songs(tracks).slice(0, 25),
-		artists: (artists?.items ?? []).map(to_artist)
-	};
-}
+const source = {
+	tracks: (p: Period): Source => [`/me/top/tracks?time_range=${p}&limit=50`, period_ttl(p)],
+	artists: (p: Period, limit = 8): Source => [`/me/top/artists?time_range=${p}&limit=${limit}`, period_ttl(p)],
+	recent: (): Source => ['/me/player/recently-played?limit=50', TTL.recent],
+	saved: (limit: number): Source => [`/me/tracks?limit=${limit}`, TTL.saved]
+};
 
-async function get_recent(): Promise<Played[]> {
-	const r = await call('/me/player/recently-played?limit=50', 120);
+const read = (s: Source) => cached_entry(...s);
+const items = async (s: Source): Promise<any[]> => (await read(s)).value?.items ?? [];
+
+const top_songs = (r: any) => songs(r?.items).slice(0, 25);
+const top_artists = (r: any) => (r?.items ?? []).map(to_artist);
+const saved_songs = (r: any) => songs(r?.items, (x) => x.track);
+
+function played(r: any): Played[] {
 	const seen = new Set<string>();
 	const out: Played[] = [];
 	for (const item of r?.items ?? []) {
@@ -145,30 +160,62 @@ async function get_recent(): Promise<Played[]> {
 		if (seen.has(key)) continue;
 		seen.add(key);
 		out.push({ ...song, at: item.played_at });
-		if (out.length === 16) break;
+		if (out.length === 24) break;
 	}
 	return out;
 }
 
-async function get_saved(): Promise<Song[]> {
-	const r = await call('/me/tracks?limit=12', 600);
-	return songs(r?.items, (x) => x.track);
+async function get_top(period: Period): Promise<Top> {
+	const [tracks, artists] = await Promise.all([read(source.tracks(period)), read(source.artists(period))]);
+	return { period, tracks: top_songs(tracks.value), artists: top_artists(artists.value) };
 }
 
-export async function get_now_playing(): Promise<Song | null> {
-	const r = await call('/me/player/currently-playing', 15);
-	if (!r?.is_playing || r.currently_playing_type !== 'track') return null;
-	return to_song(r.item);
+async function get_live(): Promise<Omit<LiveData, 'now'>> {
+	const [tracks, artists, recent, saved] = await Promise.all([
+		read(source.tracks('short_term')),
+		read(source.artists('short_term')),
+		read(source.recent()),
+		read(source.saved(12)).catch(() => null)
+	]);
+	return {
+		period: 'short_term',
+		tracks: top_songs(tracks.value),
+		artists: top_artists(artists.value),
+		recent: played(recent.value),
+		fresh: saved ? saved_songs(saved.value) : [],
+		updated: new Date(Math.min(tracks.at, artists.at, recent.at, saved?.at ?? Infinity)).toISOString()
+	};
 }
+
+let playing: { at: number; value: Promise<Live | null> } | null = null;
+
+async function read_now_playing(): Promise<Live | null> {
+	const r = await fetch_api('/me/player/currently-playing');
+	if (!r?.is_playing || r.currently_playing_type !== 'track') return null;
+	const song = to_song(r.item);
+	if (!song) return null;
+	return { ...song, started: Date.now() - (r.progress_ms ?? 0), length: r.item.duration_ms ?? 0 };
+}
+
+export function get_now_playing(): Promise<Live | null> {
+	if (!playing || Date.now() - playing.at > TTL.now * 1000) {
+		const value = read_now_playing();
+		playing = { at: Date.now(), value };
+		value.catch(() => (playing = null));
+	}
+	return playing.value;
+}
+
+const PERIOD_ORDER = ['long_term', 'medium_term', 'short_term'] as const;
 
 async function owner_tracks(): Promise<any[]> {
 	const lists = await Promise.all([
-		...(['long_term', 'medium_term', 'short_term'] as const).map((p) => raw_tracks(p).catch(() => [])),
-		call('/me/player/recently-played?limit=50', 120)
-			.then((r) => (r?.items ?? []).map((x: any) => x.track))
+		...PERIOD_ORDER.map((p) => items(source.tracks(p))),
+		items(source.recent())
+			.then((list) => list.map((x) => x.track))
 			.catch(() => []),
-		call('/me/tracks?limit=50', 600)
-			.then((r) => (r?.items ?? []).map((x: any) => x.track))
+		items(source.saved(50))
+			.then((list) => list.map((x) => x.track))
 			.catch(() => [])
 	]);
 	const seen = new Set<string>();
@@ -176,14 +223,7 @@ async function owner_tracks(): Promise<any[]> {
 }
 
 async function owner_artists(): Promise<any[]> {
-	const lists = await Promise.all(
-		(['long_term', 'medium_term', 'short_term'] as const).map((p) =>
-			call(`/me/top/artists?time_range=${p}&limit=50`, 3600)
-				.then((r) => r?.items ?? [])
-				.catch(() => [])
-		)
-	);
-	return lists.flat();
+	return (await Promise.all(PERIOD_ORDER.map((p) => items(source.artists(p, 50))))).flat();
 }
 
 const credited = (t: any, artist: string) => (t.artists ?? []).some((a: any) => norm(a.name) === norm(artist));
@@ -206,7 +246,7 @@ async function find_artist(name: string): Promise<{ id: string; name: string; im
 	for (const t of await owner_tracks()) {
 		const a = (t.artists ?? []).find((a: any) => norm(a.name) === want);
 		if (!a?.id) continue;
-		const full = await call(`/artists/${a.id}`, 86400).catch(() => null);
+		const full = await call(`/artists/${a.id}`, TTL.artist).catch(() => null);
 		return { id: a.id, name: a.name, image: image(full?.images, 320), spotify: a.external_urls?.spotify };
 	}
 	return null;
@@ -228,27 +268,25 @@ export async function owner_song(name: string, artist: string): Promise<Song | n
 }
 
 export async function get_playlist(id: string): Promise<Playlist> {
-	const p = await call(`/playlists/${encodeURIComponent(id)}`, 900);
+	const p = await call(`/playlists/${encodeURIComponent(id)}`, TTL.playlist);
 	const tracks = songs(p?.tracks?.items ?? p?.items?.items, (x) => x.track ?? x.item).filter(
 		(s): s is Song & { spotify: string } => !!s.spotify
 	);
 	return {
-		name: p?.name ?? 'Playlist',
+		name: p?.name ?? 'playlist',
 		image: image(p?.images, 300),
 		url: p?.external_urls?.spotify ?? `https://open.spotify.com/playlist/${id}`,
 		songs: tracks
 	};
 }
 
+const unless_not_found = (e: unknown) => !isHttpError(e);
+
 export async function load_live(): Promise<LiveData> {
+	const now = get_now_playing().catch(() => null);
 	try {
-		const [top, recent, fresh, now] = await Promise.all([
-			get_top('short_term'),
-			get_recent(),
-			get_saved().catch(() => []),
-			get_now_playing().catch(() => null)
-		]);
-		return { ...top, updated: new Date().toISOString(), recent, fresh, now };
+		const live = await with_snapshot('live', get_live, unless_not_found);
+		return { ...live, now: await now };
 	} catch (e) {
 		fail(e);
 	}
@@ -256,7 +294,7 @@ export async function load_live(): Promise<LiveData> {
 
 export async function load_top(period: Period): Promise<Top> {
 	try {
-		return await get_top(period);
+		return await with_snapshot(`top:${period}`, () => get_top(period), unless_not_found);
 	} catch (e) {
 		fail(e);
 	}
@@ -264,36 +302,40 @@ export async function load_top(period: Period): Promise<Top> {
 
 export async function load_artist(name: string): Promise<ArtistData> {
 	try {
-		const [found, pool] = await Promise.all([find_artist(name), owner_tracks()]);
-		const artist = found?.name ?? name;
-		const yours = songs(pool.filter((t) => credited(t, artist)));
-		const popular = await artist_songs(artist, yours.slice(0, 3).map((s) => s.name)).catch(() => []);
-		if (!found && !yours.length && !popular.length) error(404, "We couldn't find that artist.");
-		const mine = new Set(yours.map(song_key));
-		return {
-			artist,
-			image: found?.image ?? null,
-			spotify: found?.spotify,
-			yours,
-			popular: popular
-				.filter((s) => !mine.has(song_key(s)) && same_artist(artist, s.artist))
-				.map((s) => ({ ...s, image: s.image ?? null }))
-		};
+		return await with_snapshot(`artist:${norm(name)}`, () => read_artist(name), unless_not_found);
 	} catch (e) {
 		if (isHttpError(e)) throw e;
 		fail(e);
 	}
 }
 
+async function read_artist(name: string): Promise<ArtistData> {
+	const [found, pool] = await Promise.all([find_artist(name), owner_tracks()]);
+	const artist = found?.name ?? name;
+	const yours = songs(pool.filter((t) => credited(t, artist)));
+	const popular = await artist_songs(artist, yours.slice(0, 3).map((s) => s.name)).catch(() => []);
+	if (!found && !yours.length && !popular.length) error(404, "we couldn't find that artist");
+	const mine = new Set(yours.map(song_key));
+	return {
+		artist,
+		image: found?.image ?? null,
+		spotify: found?.spotify,
+		yours,
+		popular: popular
+			.filter((s) => !mine.has(song_key(s)) && same_artist(artist, s.artist))
+			.map((s) => ({ ...s, image: s.image ?? null }))
+	};
+}
+
 export function describe(e: unknown): { status: number; message: string } {
 	if (e instanceof SpotifyError) {
 		if (e.status === 0) return { status: 500, message: e.message };
-		if (e.status === 429) return { status: 503, message: 'Too many requests right now. Try again in a minute.' };
-		if (e.status === 403) return { status: 503, message: 'Spotify refused access. Check the app’s users in the Spotify dashboard.' };
-		if (e.status === 400 || e.status === 401) return { status: 503, message: 'Spotify needs to be connected again.' };
-		return { status: 502, message: 'Spotify had a hiccup. Try again shortly.' };
+		if (e.status === 429) return { status: 503, message: 'too many requests right now, try again in a minute' };
+		if (e.status === 403) return { status: 503, message: 'spotify refused access, check the app’s users in the spotify dashboard' };
+		if (e.status === 400 || e.status === 401) return { status: 503, message: 'spotify needs to be connected again' };
+		return { status: 502, message: 'spotify had a hiccup, try again shortly' };
 	}
-	return { status: 500, message: 'Something went wrong.' };
+	return { status: 500, message: 'something went wrong' };
 }
 
 function fail(e: unknown): never {

@@ -1,17 +1,15 @@
 <script lang="ts">
 	import { fade, fly, slide } from 'svelte/transition';
-	import { cubicOut } from 'svelte/easing';
+	import { ease, ease_in, settle, T_ENTER, T_MOVE, T_OUT } from '#lib/motion';
 	import Cover from './cover.svelte';
 	import { player } from '#lib/player.svelte';
-	import { cover_tint, known_tint } from '#lib/cover_tint';
-	import { hover_tint, tint_on_hover } from '#lib/hover_tint.svelte';
+	import { playing_tint, tint_on_hover } from '#lib/tint.svelte';
 	import { length } from '#lib/format';
 	import { link } from '#lib/link';
 	import { artist_path, song_menu } from '#lib/menu.svelte';
 	import type { Repeat } from '#lib/player.svelte';
-	import { spotify } from '#lib/spotify.svelte';
 
-	const REPEAT_LABEL: Record<Repeat, string> = { off: 'Repeat this song', one: 'Repeating this song' };
+	const REPEAT_LABEL: Record<Repeat, string> = { off: 'repeat this song', one: 'repeating this song' };
 	const song_item = () => {
 		const c = player.current;
 		return { name: c?.name ?? shown_name, artist: c?.artist ?? shown_artist, play: () => player.toggle() };
@@ -20,37 +18,15 @@
 	const shown_name = $derived(player.current?.name ?? player.track?.name ?? '');
 	const shown_artist = $derived(player.current?.artist ?? player.track?.artist ?? '');
 
-	async function full_songs() {
-		await spotify.connect(player.volume);
-		if (spotify.error) player.message = spotify.error;
-		else player.upgrade();
-	}
 	const cover = $derived(player.current?.image ?? player.track?.cover ?? null);
 	const pct = $derived(player.duration ? (player.time / player.duration) * 100 : 0);
 
 	const shown_cover = $derived(!player.loading && player.track ? cover : undefined);
-	const tint_src = $derived.by(() => {
+	playing_tint(() => {
 		if (!player.current) return null;
 		if (shown_cover === undefined) return undefined;
 		const { name, artist } = player.current;
 		return shown_cover ?? `/api/art?${new URLSearchParams({ artist, name })}`;
-	});
-	$effect(() => {
-		const src = hover_tint.src ?? (tint_src === null ? hover_tint.page : tint_src);
-		if (src === undefined) return;
-		const root = document.documentElement;
-		const apply = (c: string | null) => {
-			if (c) root.style.setProperty('--mist', c);
-			else root.style.removeProperty('--mist');
-		};
-		if (!src) return apply(null);
-		const known = known_tint(src);
-		if (known !== undefined) return apply(known);
-		let live = true;
-		cover_tint(src).then((c) => live && apply(c));
-		return () => {
-			live = false;
-		};
 	});
 
 	let scrub = $state<number | null>(null);
@@ -79,6 +55,26 @@
 	function scrub_cancel() {
 		scrub = null;
 	}
+	let dragging = $state(false);
+	function volume_start(e: PointerEvent) {
+		if (e.button !== 0) return;
+		const el = e.currentTarget as HTMLElement;
+		el.setPointerCapture(e.pointerId);
+		dragging = true;
+		player.set_volume(at(e, el));
+	}
+	function volume_move(e: PointerEvent) {
+		if (dragging) player.set_volume(at(e, e.currentTarget as HTMLElement));
+	}
+	function volume_end() {
+		dragging = false;
+	}
+	function volume_key(e: KeyboardEvent) {
+		const step = { ArrowRight: 0.1, ArrowUp: 0.1, ArrowLeft: -0.1, ArrowDown: -0.1 }[e.key];
+		if (step === undefined) return;
+		e.preventDefault();
+		player.set_volume(player.volume + step);
+	}
 	function seek_key(e: KeyboardEvent) {
 		if (e.key === 'ArrowRight') player.seek((player.time + 5) / player.duration);
 		if (e.key === 'ArrowLeft') player.seek((player.time - 5) / player.duration);
@@ -86,12 +82,13 @@
 </script>
 
 {#if player.current || player.message}
-	<div class="dock" transition:fly={{ y: 100, duration: 450 }}>
-		<div class="player" role="region" aria-label="Player">
+	<div class="dock">
+		<div class="player" role="region" aria-label="Player" in:fly={{ y: 140, opacity: 1, duration: T_ENTER, easing: settle }}
+			out:fly={{ y: 140, opacity: 1, duration: T_OUT, easing: ease_in }}>
 			{#key cover}
 				<span
 					class="cover press"
-					in:fade={{ duration: 300 }}
+					in:fade={{ duration: T_OUT }}
 					aria-label="Go to {shown_artist}"
 					{@attach link(() => artist_path(shown_artist))}
 					{@attach tint_on_hover(() => cover)}
@@ -105,7 +102,7 @@
 						{#if player.message}
 							<span class="sub ellipsis">{player.message}</span>
 						{:else if player.loading}
-							<span class="sub ellipsis">Loading</span>
+							<span class="sub ellipsis">loading</span>
 						{:else}
 							<span class="sub artist ellipsis" {@attach link(() => artist_path(shown_artist))}>{player.current?.credits ?? shown_artist}</span>
 						{/if}
@@ -118,16 +115,16 @@
 							{#if player.loading}
 								<span class="spin" aria-hidden="true"></span>
 							{:else if player.playing}
-								<svg viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zm6.5 0H17v14h-3.5z" /></svg>
+								<svg viewBox="0 0 24 24"><path d="M7 5h3v14H7zm7 0h3v14h-3z" /></svg>
 							{:else}
-								<svg viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" /></svg>
+								<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
 							{/if}
 						</button>
 						<button class="icon press" onclick={() => player.next()} aria-label="Next" disabled={!player.has_next}>
 							<svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z" /></svg>
 						</button>
 						<button
-							class="icon press repeat tip_anchor"
+							class="icon press side repeat tip_anchor"
 							class:on={player.repeat !== 'off'}
 							onclick={() => player.cycle_repeat()}
 							aria-label={REPEAT_LABEL[player.repeat]}
@@ -138,19 +135,8 @@
 							</svg>
 							<span class="tip" role="tooltip">{REPEAT_LABEL[player.repeat]}</span>
 						</button>
-						{#if spotify.supported && !spotify.ready}
-							<button
-								class="full press tip_anchor"
-								onclick={full_songs}
-								disabled={spotify.status === 'connecting'}
-								aria-describedby="full_songs_tip"
-							>
-								{spotify.status === 'connecting' ? 'Connecting' : 'Full songs'}
-								<span class="tip" role="tooltip" id="full_songs_tip">Sign in with Spotify Premium</span>
-							</button>
-						{/if}
-						<button class="icon press close" onclick={() => player.close()} aria-label="Close player">
-							<svg viewBox="0 0 24 24"><path d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z" /></svg>
+						<button class="icon press side close" onclick={() => player.close()} aria-label="Close player">
+							<svg viewBox="0 0 24 24" aria-hidden="true"><path class="line" d="M7 7l10 10M17 7 7 17" /></svg>
 						</button>
 					</div>
 				</div>
@@ -172,15 +158,51 @@
 						onlostpointercapture={scrub_cancel}
 						onkeydown={seek_key}
 					>
-						<span class="fill" style:scale="{shown_pct / 100} 1"></span>
+						<span class="fill" style:--rest="{100 - shown_pct}%"></span>
 						<span class="head" style:translate="{shown_pct}% 0"><span class="knob"></span></span>
 					</div>
 					<span class="time">{player.duration ? length(player.duration) : '0:00'}</span>
+					<div class="volume">
+						<button
+							class="icon press side speaker"
+							onclick={() => player.toggle_mute()}
+							aria-label={player.volume ? 'Mute' : 'Unmute'}
+						>
+							<svg viewBox="0 0 24 24" aria-hidden="true">
+								<path class="body" d="M5 10h2l4-3v10l-4-3H5z" />
+								{#if player.volume === 0}
+									<path class="line" d="m15 10 4 4m0-4-4 4" />
+								{:else}
+									<path class="line" d="M15 9.5a3.5 3.5 0 0 1 0 5" />
+									{#if player.volume > 0.5}<path class="line" d="M17.5 6.5a7.5 7.5 0 0 1 0 11" />{/if}
+								{/if}
+							</svg>
+						</button>
+						<div
+							class="level"
+							class:scrubbing={dragging}
+							role="slider"
+							tabindex="0"
+							aria-label="Volume"
+							aria-valuemin={0}
+							aria-valuemax={100}
+							aria-valuenow={Math.round(player.volume * 100)}
+							onpointerdown={volume_start}
+							onpointermove={volume_move}
+							onpointerup={volume_end}
+							onpointercancel={volume_end}
+							onlostpointercapture={volume_end}
+							onkeydown={volume_key}
+						>
+							<span class="fill" style:--rest="{100 - player.volume * 100}%"></span>
+							<span class="head" style:translate="{player.volume * 100}% 0"><span class="knob"></span></span>
+						</div>
+					</div>
 				</div>
 			</div>
 		</div>
 	</div>
-	<div class="spacer" aria-hidden="true" transition:slide={{ duration: 450, easing: cubicOut }}></div>
+	<div class="spacer" aria-hidden="true" in:slide={{ duration: T_MOVE, easing: ease }} out:slide={{ duration: T_OUT, easing: ease_in }}></div>
 {/if}
 
 <style>
@@ -201,10 +223,10 @@
 		max-width: calc(1080px - 2 * var(--gutter) + 28px);
 		margin: 0 auto;
 		padding: 12px 16px 12px 12px;
-		border-radius: var(--radius);
+		border-radius: var(--r-lg);
 		background: color-mix(in srgb, var(--surface) 92%, transparent);
 		backdrop-filter: blur(24px);
-		box-shadow: 0 18px 50px rgb(0 0 0 / 0.45);
+		box-shadow: 0 18px 50px var(--shadow);
 	}
 	.spacer {
 		height: 120px;
@@ -215,7 +237,7 @@
 		width: 72px;
 	}
 	.cover :global(.art) {
-		--art-r: 12px;
+		--art-r: var(--r-sm);
 	}
 	.body {
 		display: grid;
@@ -247,15 +269,15 @@
 	.title {
 		justify-self: start;
 		max-width: 100%;
-		font-weight: 600;
-		font-size: 1.04em;
+		font-weight: var(--fw-strong);
+		font-size: var(--fs-lg);
 		line-height: 1.3;
 	}
 	.sub {
 		justify-self: start;
 		max-width: 100%;
 		color: var(--muted);
-		font-size: 0.9em;
+		font-size: var(--fs-sm);
 	}
 	.title,
 	.artist {
@@ -275,14 +297,25 @@
 		cursor: pointer;
 		--press-scale: 0.94;
 	}
-	.icon.repeat svg {
+	.icon .line {
 		fill: none;
 		stroke: currentColor;
 		stroke-width: 2px;
 		stroke-linecap: round;
 		stroke-linejoin: round;
 	}
-	.icon.repeat.on {
+	.icon.side {
+		color: var(--muted);
+	}
+	.icon.repeat {
+		margin-left: 12px;
+	}
+	@media (hover: hover) {
+		.icon.side:hover:not(:disabled):not(.on) {
+			color: var(--text);
+		}
+	}
+	.icon.on {
 		background: var(--accent);
 		color: var(--accent-ink);
 	}
@@ -310,12 +343,12 @@
 		scale: none;
 	}
 	.icon:disabled {
-		opacity: 0.3;
+		opacity: var(--tone-off);
 		cursor: default;
 	}
 	.icon svg {
-		width: 22px;
-		height: 22px;
+		width: 24px;
+		height: 24px;
 		fill: currentColor;
 	}
 	.icon.main {
@@ -325,30 +358,54 @@
 		background: var(--accent);
 		color: var(--accent-ink);
 	}
-	.full {
-		flex: none;
-		height: 36px;
-		margin: 0 4px;
-		padding: 0 16px;
-		border-radius: 999px;
-		--press-scale: 0.94;
+	.volume {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		margin: -8px 0 -8px 16px;
+	}
+	.icon.speaker {
+		width: 32px;
+		height: 32px;
+	}
+	.speaker svg {
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 2px;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
+	.speaker .body {
+		fill: currentColor;
+	}
+	.level {
+		position: relative;
+		width: 84px;
+		height: var(--bar);
+		border-radius: var(--bar);
 		background: var(--tint);
-		font-weight: 600;
-		font-size: 0.85rem;
-		white-space: nowrap;
+		cursor: pointer;
+		touch-action: none;
 	}
-	@media (hover: hover) {
-		.full:hover:not(:disabled) {
-			box-shadow: inset 0 0 0 999px var(--wash);
+	.level::before {
+		content: '';
+		position: absolute;
+		inset: -12px 0;
+	}
+	.level:hover .knob,
+	.level:focus-visible .knob,
+	.level.scrubbing .knob {
+		scale: 1;
+		transition-duration: var(--t-in);
+	}
+	.level.scrubbing .fill,
+	.level.scrubbing .head {
+		transition: none;
+	}
+	@media (pointer: coarse), (max-width: 720px) {
+		.volume {
+			display: none;
 		}
-	}
-	.full:disabled {
-		color: var(--muted);
-		cursor: default;
-	}
-	.close svg {
-		width: 18px;
-		height: 18px;
 	}
 	.seek {
 		display: flex;
@@ -359,17 +416,17 @@
 		flex: none;
 		min-width: 2.6em;
 		color: var(--muted);
-		font-size: 0.8rem;
+		font-size: var(--fs-xs);
 		font-variant-numeric: tabular-nums;
 	}
-	.time:last-child {
+	.progress + .time {
 		text-align: right;
 	}
 	.progress {
 		position: relative;
 		flex: 1;
-		height: 4px;
-		border-radius: 4px;
+		height: var(--bar);
+		border-radius: var(--bar);
 		background: var(--tint);
 		cursor: pointer;
 	}
@@ -381,16 +438,15 @@
 	.fill {
 		position: absolute;
 		inset: 0;
-		border-radius: 4px;
 		background: var(--accent);
-		transform-origin: left;
-		transition: scale 0.25s linear;
+		clip-path: inset(0 var(--rest) 0 0 round var(--bar));
+		transition: clip-path var(--t-tick) linear;
 	}
 	.head {
 		position: absolute;
 		inset: 0;
 		pointer-events: none;
-		transition: translate 0.25s linear;
+		transition: translate var(--t-tick) linear;
 	}
 	.knob {
 		position: absolute;
@@ -401,7 +457,7 @@
 		margin: -6px 0 0 -6px;
 		border-radius: 50%;
 		background: var(--accent);
-		box-shadow: 0 2px 8px rgb(0 0 0 / 0.4);
+		box-shadow: 0 2px 8px var(--shadow);
 		scale: 0;
 		transition: scale var(--t-out) var(--ease-ui);
 	}
