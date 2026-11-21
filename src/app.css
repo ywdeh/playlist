@@ -242,6 +242,10 @@ button {
 	animation: cascade_in var(--t-enter) var(--ease) both;
 	animation-delay: calc(min(var(--i, 0), 16) * 40ms);
 }
+.cascade:has(.tip_anchor:hover, .tip_anchor:focus-within, .tip_anchor.tip_show) {
+	position: relative;
+	z-index: 99;
+}
 html:not(.ready) .cascade {
 	animation-play-state: paused;
 }
@@ -265,7 +269,7 @@ html:not(.ready) .cascade {
 	position: absolute;
 	bottom: calc(100% + 10px);
 	left: 50%;
-	z-index: 5;
+	z-index: 99;
 	padding: 7px 12px;
 	border-radius: var(--r-sm);
 	background: var(--surface);
