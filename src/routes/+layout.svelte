@@ -5,9 +5,11 @@
 	import ContextMenu from '#lib/components/context_menu.svelte';
 	import Footer from '#lib/components/footer.svelte';
 	import { tint_root } from '#lib/tint.svelte';
+	import { tooltips } from '#lib/tooltip.svelte';
 
 	let { children } = $props();
 	tint_root();
+	tooltips();
 </script>
 
 <svelte:head>

@@ -12,6 +12,18 @@
 	initial-value: 0px;
 }
 
+@property --fade-start {
+	syntax: '<length>';
+	inherits: false;
+	initial-value: 0px;
+}
+
+@property --fade-end {
+	syntax: '<length>';
+	inherits: false;
+	initial-value: 0px;
+}
+
 :root {
 	--bg: #0f0f10;
 	--surface: #1a1a1c;
@@ -72,6 +84,8 @@
 	--t-tick: 0.25s;
 
 	color-scheme: dark;
+	user-select: none;
+	-webkit-user-select: none;
 	font-family: 'Figtree Variable', ui-sans-serif, system-ui, sans-serif;
 	font-size: 18px;
 	line-height: 1.35;
@@ -116,14 +130,8 @@ body {
 		scrollbar-color: var(--line) transparent;
 	}
 }
-::selection {
-	background: var(--tint);
-	color: inherit;
-}
 img {
 	display: block;
-	user-select: none;
-	-webkit-user-select: none;
 	-webkit-user-drag: none;
 	-webkit-touch-callout: none;
 	pointer-events: none;
@@ -217,12 +225,6 @@ button {
 	color: var(--muted);
 }
 
-button,
-.press {
-	user-select: none;
-	-webkit-user-select: none;
-}
-
 .press {
 	--press-scale: 0.96;
 	transition-property: scale, background-color, box-shadow, color, opacity;
@@ -242,6 +244,12 @@ button,
 }
 html:not(.ready) .cascade {
 	animation-play-state: paused;
+}
+@keyframes swap_in {
+	from {
+		opacity: 0;
+		translate: 0 6px;
+	}
 }
 @keyframes cascade_in {
 	from {
@@ -269,7 +277,7 @@ html:not(.ready) .cascade {
 	white-space: nowrap;
 	pointer-events: none;
 	opacity: 0;
-	translate: -50% 4px;
+	translate: calc(-50% + var(--nudge, 0px)) 4px;
 	transition:
 		opacity var(--t-out) var(--ease-ui),
 		translate var(--t-out) var(--ease-ui);
@@ -277,7 +285,7 @@ html:not(.ready) .cascade {
 .tip.end {
 	left: auto;
 	right: 0;
-	translate: 0 4px;
+	translate: var(--nudge, 0px) 4px;
 }
 .tip.wide {
 	display: grid;
@@ -294,26 +302,29 @@ html:not(.ready) .cascade {
 	color: var(--muted);
 	font-size: 0.95em;
 }
-.tip.below {
+.tip.below,
+.tip.flip {
 	bottom: auto;
 	top: calc(100% + 10px);
 }
-.tip_anchor:focus-visible > .tip {
+.tip_anchor:focus-visible > .tip,
+.tip_anchor.tip_show > .tip {
 	opacity: 1;
-	translate: -50% 0;
+	translate: calc(-50% + var(--nudge, 0px)) 0;
 	transition-duration: var(--t-in);
 }
-.tip_anchor:focus-visible > .tip.end {
-	translate: 0 0;
+.tip_anchor:focus-visible > .tip.end,
+.tip_anchor.tip_show > .tip.end {
+	translate: var(--nudge, 0px) 0;
 }
 @media (hover: hover) {
 	.tip_anchor:hover > .tip {
 		opacity: 1;
-		translate: -50% 0;
+		translate: calc(-50% + var(--nudge, 0px)) 0;
 		transition-duration: var(--t-in);
 	}
 	.tip_anchor:hover > .tip.end {
-		translate: 0 0;
+		translate: var(--nudge, 0px) 0;
 	}
 }
 

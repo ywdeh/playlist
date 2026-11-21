@@ -25,7 +25,7 @@
 
 <div class="cascade" style:--i={0}>
 	<div class="back press" role="link" tabindex="0" {@attach link(() => back)} aria-label="Back">
-		<svg viewBox="0 0 24 24"><path d="M15.4 7.4 14 6l-6 6 6 6 1.4-1.4-4.6-4.6z" /></svg>
+		<svg viewBox="0 0 24 24"><path d="M14 7l-5 5 5 5" /></svg>
 	</div>
 </div>
 
@@ -43,9 +43,9 @@
 	{#if all.length}
 		<button class="play press cascade" style:--i={3} onclick={play_all} aria-label={show_pause ? 'Pause' : 'Play'}>
 			{#if show_pause}
-				<svg viewBox="0 0 24 24"><path d="M5 3h5v18H5zm9 0h5v18h-5z" /></svg>
+				<svg viewBox="0 0 24 24"><path d="M6 4h3v16H6zm9 0h3v16h-3z" /></svg>
 			{:else}
-				<svg viewBox="0 0 24 24"><path d="M7 3v18l14-9z" /></svg>
+				<svg viewBox="0 0 24 24"><path d="M8 4.8v14.4l11.1-7.2z" /></svg>
 			{/if}
 		</button>
 	{/if}
@@ -98,7 +98,11 @@
 	.back svg {
 		width: 24px;
 		height: 24px;
-		fill: currentColor;
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 2px;
+		stroke-linecap: round;
+		stroke-linejoin: round;
 	}
 	header {
 		display: grid;
@@ -111,8 +115,6 @@
 		display: grid;
 		justify-items: center;
 		gap: 22px;
-		user-select: none;
-		-webkit-user-select: none;
 	}
 	.photo {
 		width: clamp(180px, 40vw, 260px);
@@ -137,6 +139,9 @@
 		width: 24px;
 		height: 24px;
 		fill: currentColor;
+		stroke: currentColor;
+		stroke-width: 2px;
+		stroke-linejoin: round;
 	}
 	section {
 		margin-top: 64px;

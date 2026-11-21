@@ -85,119 +85,115 @@
 	<div class="dock">
 		<div class="player" role="region" aria-label="Player" in:fly={{ y: 140, opacity: 1, duration: T_ENTER, easing: settle }}
 			out:fly={{ y: 140, opacity: 1, duration: T_OUT, easing: ease_in }}>
-			{#key cover}
-				<span
-					class="cover press"
-					in:fade={{ duration: T_OUT }}
-					aria-label="Go to {shown_artist}"
-					{@attach link(() => artist_path(shown_artist))}
-					{@attach tint_on_hover(() => cover)}
-					{@attach song_menu(() => song_item())}
-				><Cover src={cover} /></span>
-			{/key}
-			<div class="body">
-				<div class="row">
-					<div class="text" {@attach song_menu(() => song_item())}>
-						<span class="title ellipsis" {@attach link(() => artist_path(shown_artist))}>{shown_name}</span>
-						{#if player.message}
-							<span class="sub ellipsis">{player.message}</span>
-						{:else if player.loading}
-							<span class="sub ellipsis">loading</span>
-						{:else}
-							<span class="sub artist ellipsis" {@attach link(() => artist_path(shown_artist))}>{player.current?.credits ?? shown_artist}</span>
-						{/if}
-					</div>
-					<div class="controls">
-						<button class="icon press prev" onclick={() => player.prev()} aria-label="Previous" disabled={!player.current}>
-							<svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z" /></svg>
-						</button>
-						<button class="icon main press" onclick={() => player.toggle()} aria-label={player.playing ? 'Pause' : 'Play'} disabled={!player.track}>
-							{#if player.loading}
-								<span class="spin" aria-hidden="true"></span>
-							{:else if player.playing}
-								<svg viewBox="0 0 24 24"><path d="M7 5h3v14H7zm7 0h3v14h-3z" /></svg>
-							{:else}
-								<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-							{/if}
-						</button>
-						<button class="icon press" onclick={() => player.next()} aria-label="Next" disabled={!player.has_next}>
-							<svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z" /></svg>
-						</button>
-						<button
-							class="icon press side repeat tip_anchor"
-							class:on={player.repeat !== 'off'}
-							onclick={() => player.cycle_repeat()}
-							aria-label={REPEAT_LABEL[player.repeat]}
-							aria-pressed={player.repeat !== 'off'}
-						>
-							<svg viewBox="0 0 24 24" aria-hidden="true">
-								<path class="line" d="M4 11V9.5A3.5 3.5 0 0 1 7.5 6H18m-3-3 3 3-3 3M20 13v1.5a3.5 3.5 0 0 1-3.5 3.5H6m3 3-3-3 3-3" />
-							</svg>
-							<span class="tip" role="tooltip">{REPEAT_LABEL[player.repeat]}</span>
-						</button>
-						<button class="icon press side close" onclick={() => player.close()} aria-label="Close player">
-							<svg viewBox="0 0 24 24" aria-hidden="true"><path class="line" d="M7 7l10 10M17 7 7 17" /></svg>
-						</button>
-					</div>
+			<div class="info">
+				{#key cover}
+					<span
+						class="cover press"
+						in:fade={{ duration: T_OUT }}
+						aria-label="Go to {shown_artist}"
+						{@attach link(() => artist_path(shown_artist))}
+						{@attach tint_on_hover(() => cover)}
+						{@attach song_menu(() => song_item())}
+					><Cover src={cover} /></span>
+				{/key}
+				<div class="text" {@attach song_menu(() => song_item())}>
+					<span class="title ellipsis" {@attach link(() => artist_path(shown_artist))}>{shown_name}</span>
+					{#if player.message}
+						<span class="sub ellipsis">{player.message}</span>
+					{:else if player.loading}
+						<span class="sub ellipsis">loading</span>
+					{:else}
+						<span class="sub artist ellipsis" {@attach link(() => artist_path(shown_artist))}>{player.current?.credits ?? shown_artist}</span>
+					{/if}
 				</div>
-				<div class="seek">
-					<span class="time">{length(Math.floor(shown_time))}</span>
-					<div
-						class="progress"
-						class:scrubbing={scrub !== null}
-						role="slider"
-						tabindex="0"
-						aria-label="Seek"
-						aria-valuemin={0}
-						aria-valuemax={Math.round(player.duration)}
-						aria-valuenow={Math.round(shown_time)}
-						onpointerdown={scrub_start}
-						onpointermove={scrub_move}
-						onpointerup={scrub_end}
-						onpointercancel={scrub_cancel}
-						onlostpointercapture={scrub_cancel}
-						onkeydown={seek_key}
-					>
-						<span class="fill" style:--rest="{100 - shown_pct}%"></span>
-						<span class="head" style:translate="{shown_pct}% 0"><span class="knob"></span></span>
-					</div>
-					<span class="time">{player.duration ? length(player.duration) : '0:00'}</span>
-					<div class="volume">
-						<button
-							class="icon press side speaker"
-							onclick={() => player.toggle_mute()}
-							aria-label={player.volume ? 'Mute' : 'Unmute'}
-						>
-							<svg viewBox="0 0 24 24" aria-hidden="true">
-								<path class="body" d="M5 10h2l4-3v10l-4-3H5z" />
-								{#if player.volume === 0}
-									<path class="line" d="m15 10 4 4m0-4-4 4" />
-								{:else}
-									<path class="line" d="M15 9.5a3.5 3.5 0 0 1 0 5" />
-									{#if player.volume > 0.5}<path class="line" d="M17.5 6.5a7.5 7.5 0 0 1 0 11" />{/if}
-								{/if}
-							</svg>
-						</button>
-						<div
-							class="level"
-							class:scrubbing={dragging}
-							role="slider"
-							tabindex="0"
-							aria-label="Volume"
-							aria-valuemin={0}
-							aria-valuemax={100}
-							aria-valuenow={Math.round(player.volume * 100)}
-							onpointerdown={volume_start}
-							onpointermove={volume_move}
-							onpointerup={volume_end}
-							onpointercancel={volume_end}
-							onlostpointercapture={volume_end}
-							onkeydown={volume_key}
-						>
-							<span class="fill" style:--rest="{100 - player.volume * 100}%"></span>
-							<span class="head" style:translate="{player.volume * 100}% 0"><span class="knob"></span></span>
-						</div>
-					</div>
+			</div>
+			<div class="controls">
+				<button class="icon press prev" onclick={() => player.prev()} aria-label="Previous" disabled={!player.current}>
+					<svg viewBox="0 0 24 24"><path d="M7 7v10M11.2 12 17 7.9v8.2z" /></svg>
+				</button>
+				<button class="icon main press" onclick={() => player.toggle()} aria-label={player.playing ? 'Pause' : 'Play'} disabled={!player.track}>
+					{#if player.loading}
+						<span class="spin" aria-hidden="true"></span>
+					{:else if player.playing}
+						<svg viewBox="0 0 24 24"><path d="M8 6h1v12H8zm7 0h1v12h-1z" /></svg>
+					{:else}
+						<svg viewBox="0 0 24 24"><path d="M9 6.8v10.4l8.1-5.2z" /></svg>
+					{/if}
+				</button>
+				<button class="icon press" onclick={() => player.next()} aria-label="Next" disabled={!player.has_next}>
+					<svg viewBox="0 0 24 24"><path d="M17 7v10M7 7.9v8.2l5.8-4.1z" /></svg>
+				</button>
+			</div>
+			<div class="seek">
+				<span class="time">{length(Math.floor(shown_time))}</span>
+				<div
+					class="progress"
+					class:scrubbing={scrub !== null}
+					role="slider"
+					tabindex="0"
+					aria-label="Seek"
+					aria-valuemin={0}
+					aria-valuemax={Math.round(player.duration)}
+					aria-valuenow={Math.round(shown_time)}
+					onpointerdown={scrub_start}
+					onpointermove={scrub_move}
+					onpointerup={scrub_end}
+					onpointercancel={scrub_cancel}
+					onlostpointercapture={scrub_cancel}
+					onkeydown={seek_key}
+				>
+					<span class="fill" style:--rest="{100 - shown_pct}%"></span>
+					<span class="head" style:translate="{shown_pct}% 0"><span class="knob"></span></span>
+				</div>
+				<span class="time">{player.duration ? length(player.duration) : '0:00'}</span>
+			</div>
+			<div class="tools">
+				<button
+					class="icon press side tip_anchor"
+					class:on={player.repeat !== 'off'}
+					onclick={() => player.cycle_repeat()}
+					aria-label={REPEAT_LABEL[player.repeat]}
+					aria-pressed={player.repeat !== 'off'}
+				>
+					<svg viewBox="0 0 24 24" aria-hidden="true">
+						<path class="line" d="M4 11V9.5A3.5 3.5 0 0 1 7.5 6H18m-3-3 3 3-3 3M20 13v1.5a3.5 3.5 0 0 1-3.5 3.5H6m3 3-3-3 3-3" />
+					</svg>
+					<span class="tip" role="tooltip">{REPEAT_LABEL[player.repeat]}</span>
+				</button>
+				<button class="icon press side close" onclick={() => player.close()} aria-label="Close player">
+					<svg viewBox="0 0 24 24" aria-hidden="true"><path class="line" d="M7 7l10 10M17 7 7 17" /></svg>
+				</button>
+			</div>
+			<div class="volume">
+				<button class="icon press side speaker" onclick={() => player.toggle_mute()} aria-label={player.volume ? 'Mute' : 'Unmute'}>
+					<svg viewBox="0 0 24 24" aria-hidden="true">
+						<path class="body" d="M5 10h2l4-3v10l-4-3H5z" />
+						{#if player.volume === 0}
+							<path class="line" d="m15 10 4 4m0-4-4 4" />
+						{:else}
+							<path class="line" d="M15 9.5a3.5 3.5 0 0 1 0 5" />
+							{#if player.volume > 0.5}<path class="line" d="M17.5 6.5a7.5 7.5 0 0 1 0 11" />{/if}
+						{/if}
+					</svg>
+				</button>
+				<div
+					class="level"
+					class:scrubbing={dragging}
+					role="slider"
+					tabindex="0"
+					aria-label="Volume"
+					aria-valuemin={0}
+					aria-valuemax={100}
+					aria-valuenow={Math.round(player.volume * 100)}
+					onpointerdown={volume_start}
+					onpointermove={volume_move}
+					onpointerup={volume_end}
+					onpointercancel={volume_end}
+					onlostpointercapture={volume_end}
+					onkeydown={volume_key}
+				>
+					<span class="fill" style:--rest="{100 - player.volume * 100}%"></span>
+					<span class="head" style:translate="{player.volume * 100}% 0"><span class="knob"></span></span>
 				</div>
 			</div>
 		</div>
@@ -217,9 +213,11 @@
 	}
 	.player {
 		pointer-events: auto;
-		display: flex;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 480px) minmax(0, 1fr);
+		grid-template-areas: 'info controls tools' 'info seek volume';
 		align-items: center;
-		gap: 18px;
+		gap: 2px 32px;
 		max-width: calc(1080px - 2 * var(--gutter) + 28px);
 		margin: 0 auto;
 		padding: 12px 16px 12px 12px;
@@ -239,32 +237,17 @@
 	.cover :global(.art) {
 		--art-r: var(--r-sm);
 	}
-	.body {
-		display: grid;
-		flex: 1;
-		min-width: 0;
-		gap: 6px;
-	}
-	.row {
+	.info {
+		grid-area: info;
 		display: flex;
 		align-items: center;
 		gap: 16px;
 		min-width: 0;
 	}
 	.text {
-		display: flex;
-		align-items: baseline;
-		flex: 1;
+		display: grid;
+		gap: 2px;
 		min-width: 0;
-		gap: 12px;
-	}
-	.text > * {
-		flex: 0 1 auto;
-		min-width: 0;
-	}
-	.text > .sub {
-		flex-shrink: 2;
-		min-width: 4em;
 	}
 	.title {
 		justify-self: start;
@@ -307,9 +290,6 @@
 	.icon.side {
 		color: var(--muted);
 	}
-	.icon.repeat {
-		margin-left: 12px;
-	}
 	@media (hover: hover) {
 		.icon.side:hover:not(:disabled):not(.on) {
 			color: var(--text);
@@ -320,10 +300,18 @@
 		color: var(--accent-ink);
 	}
 	.controls {
+		grid-area: controls;
+		justify-self: center;
+		display: flex;
+		align-items: center;
+		gap: 12px;
+	}
+	.tools {
+		grid-area: tools;
+		justify-self: end;
 		display: flex;
 		align-items: center;
 		gap: 4px;
-		flex: none;
 	}
 	.icon {
 		display: grid;
@@ -350,11 +338,14 @@
 		width: 24px;
 		height: 24px;
 		fill: currentColor;
+		stroke: currentColor;
+		stroke-width: 2px;
+		stroke-linecap: round;
+		stroke-linejoin: round;
 	}
 	.icon.main {
 		width: 46px;
 		height: 46px;
-		margin: 0 4px;
 		background: var(--accent);
 		color: var(--accent-ink);
 	}
@@ -362,7 +353,9 @@
 		display: flex;
 		align-items: center;
 		gap: 4px;
-		margin: -8px 0 -8px 16px;
+		grid-area: volume;
+		justify-self: end;
+		margin-right: 4px;
 	}
 	.icon.speaker {
 		width: 32px;
@@ -402,12 +395,13 @@
 	.level.scrubbing .head {
 		transition: none;
 	}
-	@media (pointer: coarse), (max-width: 720px) {
+	@media (pointer: coarse), (max-width: 860px) {
 		.volume {
 			display: none;
 		}
 	}
 	.seek {
+		grid-area: seek;
 		display: flex;
 		align-items: center;
 		gap: 12px;
@@ -487,23 +481,30 @@
 			transform: rotate(360deg);
 		}
 	}
-	@media (max-width: 520px) {
+	@media (max-width: 860px) {
 		.player {
-			gap: 12px;
-			padding: 10px 12px 10px 10px;
+			grid-template-columns: minmax(0, 1fr) auto auto;
+			grid-template-areas: 'info controls tools' 'seek seek seek';
+			gap: 8px 16px;
 		}
 		.cover {
-			width: 60px;
+			width: 48px;
 		}
-		.row {
-			gap: 8px;
+		.seek {
+			padding: 0 4px 4px;
+		}
+	}
+	@media (max-width: 520px) {
+		.player {
+			gap: 6px 8px;
+			padding: 10px 12px 10px 10px;
+		}
+		.controls {
+			gap: 4px;
 		}
 		.close,
 		.prev {
 			display: none;
-		}
-		.icon.main {
-			margin: 0;
 		}
 	}
 </style>

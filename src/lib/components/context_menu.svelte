@@ -180,12 +180,6 @@
 	.copied .swap {
 		animation: swap_in var(--t-out) var(--ease);
 	}
-	@keyframes swap_in {
-		from {
-			opacity: 0;
-			translate: 0 6px;
-		}
-	}
 	button.looking {
 		color: var(--muted);
 		opacity: var(--tone-off);

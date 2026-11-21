@@ -158,15 +158,15 @@
 		{#if !(at_start && at_end)}
 			<div class="arrows">
 				<button class="arrow press" onclick={() => page(-1)} disabled={at_start} aria-label="Scroll back">
-					<svg viewBox="0 0 24 24"><path d="M15.4 7.4 14 6l-6 6 6 6 1.4-1.4-4.6-4.6z" /></svg>
+					<svg viewBox="0 0 24 24"><path d="M14 7l-5 5 5 5" /></svg>
 				</button>
 				<button class="arrow press" onclick={() => page(1)} disabled={at_end} aria-label="Scroll forward">
-					<svg viewBox="0 0 24 24"><path d="M8.6 16.6 10 18l6-6-6-6-1.4 1.4 4.6 4.6z" /></svg>
+					<svg viewBox="0 0 24 24"><path d="M10 7l5 5-5 5" /></svg>
 				</button>
 			</div>
 		{/if}
 	</header>
-	<div class="shelf" bind:this={scroller} onscroll={measure} {@attach drag}>
+	<div class="shelf" class:start={at_start} class:end={at_end} bind:this={scroller} onscroll={measure} {@attach drag}>
 		{@render children()}
 	</div>
 </section>
@@ -213,7 +213,11 @@
 	.arrow svg {
 		width: 24px;
 		height: 24px;
-		fill: currentColor;
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 2px;
+		stroke-linecap: round;
+		stroke-linejoin: round;
 	}
 	.shelf {
 		display: grid;
@@ -227,18 +231,34 @@
 		margin: -8px calc(-1 * var(--gutter)) -8px;
 		padding: 8px var(--gutter) 14px;
 		cursor: grab;
+		--fade-start: var(--gutter);
+		--fade-end: var(--gutter);
 		mask-image: linear-gradient(
 			to right,
-			transparent,
-			#000 var(--gutter),
-			#000 calc(100% - var(--gutter)),
-			transparent
+			#0000,
+			#0001 calc(var(--fade-start) * 0.3),
+			#0005 calc(var(--fade-start) * 0.55),
+			#000b calc(var(--fade-start) * 0.8),
+			#000 var(--fade-start),
+			#000 calc(100% - var(--fade-end)),
+			#000b calc(100% - var(--fade-end) * 0.8),
+			#0005 calc(100% - var(--fade-end) * 0.55),
+			#0001 calc(100% - var(--fade-end) * 0.3),
+			#0000
 		);
-		scroll-snap-type: x mandatory;
+		transition:
+			--fade-start var(--t-move) var(--ease),
+			--fade-end var(--t-move) var(--ease);		scroll-snap-type: x mandatory;
 		scroll-padding-inline: var(--gutter);
 	}
 	.shelf > :global(*) {
 		scroll-snap-align: start;
+	}
+	.shelf.start {
+		--fade-start: 0px;
+	}
+	.shelf.end {
+		--fade-end: 0px;
 	}
 	.shelf:global(.free) {
 		scroll-snap-type: none;
@@ -254,7 +274,6 @@
 	}
 	.shelf:global(.dragging) {
 		cursor: grabbing;
-		user-select: none;
 	}
 	.shelf:global(.dragging) :global(.press) {
 		--press-scale: 1;

@@ -97,8 +97,6 @@ export function context_menu(build: () => MenuParts) {
 		el.addEventListener('pointerdown', down);
 		el.addEventListener('click', click, true);
 		el.style.setProperty('-webkit-touch-callout', 'none');
-		el.style.setProperty('-webkit-user-select', 'none');
-		el.style.setProperty('user-select', 'none');
 		return () => {
 			cancel();
 			el.removeEventListener('contextmenu', on_context);
