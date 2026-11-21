@@ -1,0 +1,267 @@
+@import '@fontsource-variable/figtree';
+
+@property --mist {
+	syntax: '<color>';
+	inherits: true;
+	initial-value: rgb(155 184 207);
+}
+
+:root {
+	--bg: #0f0f10;
+	--surface: #1a1a1c;
+	--surface-2: #242427;
+	--text: color-mix(in oklab, #f4f4f5, var(--mist) calc(var(--tone-text) * 100%));
+	--muted: color-mix(in oklab, #a1a1aa, var(--mist) calc(var(--tone-text) * 220%));
+
+	--mist: rgb(155 184 207);
+	--mist-ink: #111214;
+	transition: --mist 0.45s var(--ease-ui);
+
+	--tone-full: 1;
+	--tone-line: 0.55;
+	--tone-tint: 0.16;
+	--tone-wash: 0.08;
+	--tone-text: 0.14;
+	--tone-grain: 0.02;
+
+	--accent: color-mix(in srgb, var(--mist) calc(var(--tone-full) * 100%), transparent);
+	--accent-ink: var(--mist-ink);
+	--wash: color-mix(in srgb, var(--mist) calc(var(--tone-wash) * 100%), transparent);
+	--line: color-mix(in srgb, var(--mist) calc(var(--tone-line) * 100%), transparent);
+	--tint: color-mix(in srgb, var(--mist) calc(var(--tone-tint) * 100%), transparent);
+
+	--radius: 20px;
+	--gutter: clamp(20px, 5vw, 48px);
+	--section-gap: clamp(104px, 12vw, 144px);
+	--ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+	--t-in: 0.2s;
+	--t-out: 0.34s;
+	--ease-ui: cubic-bezier(0.3, 0.3, 0, 1);
+	color-scheme: dark;
+	font-family: 'Figtree Variable', ui-sans-serif, system-ui, sans-serif;
+	font-size: 18px;
+	line-height: 1.35;
+	color: var(--text);
+	background: var(--bg);
+	-webkit-font-smoothing: antialiased;
+	-webkit-tap-highlight-color: transparent;
+}
+
+* {
+	box-sizing: border-box;
+}
+body {
+	margin: 0;
+	min-height: 100vh;
+}
+
+::-webkit-scrollbar {
+	width: 3px;
+	height: 3px;
+	background: transparent;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+	background: transparent;
+}
+::-webkit-scrollbar-button {
+	display: none;
+	width: 0;
+	height: 0;
+}
+::-webkit-scrollbar-thumb {
+	background: var(--line);
+	border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+	background: var(--accent);
+}
+@supports (-moz-appearance: none) {
+	:root {
+		scrollbar-width: thin;
+		scrollbar-color: var(--line) transparent;
+	}
+}
+::selection {
+	background: var(--tint);
+	color: inherit;
+}
+img {
+	display: block;
+	user-select: none;
+	-webkit-user-select: none;
+	-webkit-user-drag: none;
+	-webkit-touch-callout: none;
+	pointer-events: none;
+}
+h1,
+h2,
+h3,
+p {
+	margin: 0;
+}
+a {
+	color: inherit;
+}
+[role='link'] {
+	cursor: pointer;
+}
+button {
+	font: inherit;
+	color: inherit;
+	border: 0;
+	background: none;
+	padding: 0;
+	cursor: pointer;
+	text-align: left;
+}
+:focus {
+	outline: none;
+}
+:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 3px;
+	border-radius: 8px;
+}
+
+.ellipsis {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+@supports (animation-timeline: scroll()) {
+	.ellipsis {
+		text-overflow: clip;
+		animation: fade_end linear both;
+		animation-timeline: scroll(self inline);
+		animation-duration: auto !important;
+	}
+	@keyframes fade_end {
+		from,
+		to {
+			mask-image: linear-gradient(to right, #000 calc(100% - 2.6em), transparent);
+		}
+	}
+}
+.muted {
+	color: var(--muted);
+}
+
+button,
+.press {
+	user-select: none;
+	-webkit-user-select: none;
+}
+
+.press {
+	--press-scale: 0.96;
+	transition-property: scale, background-color, box-shadow, color, opacity;
+	transition-timing-function: var(--ease-ui);
+	transition-duration: var(--t-out);
+}
+.press:hover {
+	transition-duration: var(--t-out), var(--t-in), var(--t-in), var(--t-in), var(--t-in);
+}
+.press:active {
+	scale: var(--press-scale);
+	transition-duration: var(--t-in);
+}
+.cascade {
+	animation: cascade_in 0.6s var(--ease) both;
+	animation-delay: calc(min(var(--i, 0), 16) * 40ms);
+}
+html:not(.ready) .cascade {
+	animation-play-state: paused;
+}
+@keyframes cascade_in {
+	from {
+		opacity: 0;
+		translate: 0 12px;
+	}
+}
+
+.tip_anchor {
+	position: relative;
+}
+.tip {
+	position: absolute;
+	bottom: calc(100% + 10px);
+	left: 50%;
+	z-index: 5;
+	padding: 7px 12px;
+	border-radius: 10px;
+	background: var(--surface);
+	box-shadow: 0 10px 30px rgb(0 0 0 / 0.45);
+	color: var(--text);
+	font-size: 0.8rem;
+	font-weight: 500;
+	line-height: 1.3;
+	white-space: nowrap;
+	pointer-events: none;
+	opacity: 0;
+	translate: -50% 4px;
+	transition:
+		opacity var(--t-out) var(--ease-ui),
+		translate var(--t-out) var(--ease-ui);
+}
+.tip.end {
+	left: auto;
+	right: 0;
+	translate: 0 4px;
+}
+.tip.wide {
+	display: grid;
+	gap: 12px;
+	width: max-content;
+	max-width: min(320px, calc(100vw - 2 * var(--gutter)));
+	padding: 18px 20px;
+	border-radius: 14px;
+	line-height: 1.5;
+	white-space: normal;
+	text-align: left;
+}
+.tip.wide > :not(:first-child) {
+	color: var(--muted);
+	font-size: 0.95em;
+}
+.tip.below {
+	bottom: auto;
+	top: calc(100% + 10px);
+}
+.tip_anchor:focus-visible > .tip {
+	opacity: 1;
+	translate: -50% 0;
+	transition-duration: var(--t-in);
+}
+.tip_anchor:focus-visible > .tip.end {
+	translate: 0 0;
+}
+@media (hover: hover) {
+	.tip_anchor:hover > .tip {
+		opacity: 1;
+		translate: -50% 0;
+		transition-duration: var(--t-in);
+	}
+	.tip_anchor:hover > .tip.end {
+		translate: 0 0;
+	}
+}
+
+.reveal {
+	transition:
+		opacity 0.8s var(--ease),
+		translate 0.8s var(--ease);
+}
+.reveal_wait {
+	opacity: 0;
+	translate: 0 24px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		transition-duration: 0.01ms !important;
+	}
+}

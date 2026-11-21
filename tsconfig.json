@@ -1,0 +1,17 @@
+{
+	"extends": "$app/tsconfig.json",
+	"include": ["src", "*"],
+	"exclude": ["src/service-worker"],
+	"compilerOptions": {
+		"allowJs": true,
+		"checkJs": false,
+		"resolveJsonModule": true,
+		"skipLibCheck": true,
+		"strict": true,
+		"paths": {
+			"#lib": ["./src/lib"],
+			"#lib/*": ["./src/lib/*"]
+		},
+		"types": ["$app/types", "node"]
+	}
+}
