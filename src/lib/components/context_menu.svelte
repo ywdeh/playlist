@@ -45,9 +45,10 @@
 		};
 	});
 
-	let armed: HTMLButtonElement | null = null;
+	const ENABLED = '[role="menuitem"]:not(:disabled, [aria-disabled="true"])';
+	let armed: HTMLElement | null = null;
 
-	function arm(next: HTMLButtonElement | null) {
+	function arm(next: HTMLElement | null) {
 		if (next === armed) return;
 		armed?.removeAttribute('data-armed');
 		next?.setAttribute('data-armed', '');
@@ -57,8 +58,8 @@
 	$effect(() => {
 		if (!menu.open || !menu.held) return;
 		const aim = (t: Touch | undefined) => {
-			const hit = t && document.elementFromPoint(t.clientX, t.clientY)?.closest<HTMLButtonElement>('button[role="menuitem"]');
-			arm(hit && el?.contains(hit) && !hit.disabled ? hit : null);
+			const hit = t && document.elementFromPoint(t.clientX, t.clientY)?.closest<HTMLElement>(ENABLED);
+			arm(hit && el?.contains(hit) ? hit : null);
 		};
 		const move = (e: TouchEvent) => {
 			e.preventDefault();
@@ -81,6 +82,11 @@
 			arm(null);
 		};
 	});
+
+	function leave(e: MouseEvent, ready: boolean) {
+		if (ready) setTimeout(close_menu);
+		else e.preventDefault();
+	}
 
 	function run(fn: () => void) {
 		close_menu();
@@ -124,8 +130,8 @@
 		}
 		if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
 		e.preventDefault();
-		const buttons = [...el.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
-		const i = buttons.indexOf(document.activeElement as HTMLButtonElement);
+		const buttons = [...el.querySelectorAll<HTMLElement>(ENABLED)];
+		const i = buttons.indexOf(document.activeElement as HTMLElement);
 		const next = e.key === 'ArrowDown' ? i + 1 : i - 1;
 		buttons[(next + buttons.length) % buttons.length]?.focus();
 	}
@@ -146,23 +152,27 @@
 			oncontextmenu={(e) => e.preventDefault()}
 		>
 			{#each menu.items as item (item.label)}
-				<button role="menuitem" onclick={() => run(item.run)}>{item.label}</button>
+				<button class="item" role="menuitem" onclick={() => run(item.run)}>{item.label}</button>
 			{/each}
 			{#if menu.items.length && menu.spotify.length}<div class="gap" role="separator"></div>{/if}
 			{#each menu.spotify as item, i (item.label)}
 				{@const to = found[i]}
-				<button
+				<a
+					class="item"
 					role="menuitem"
 					class:looking={!to}
-					disabled={!to}
-					onclick={() => to && run(() => window.open(to.url, '_blank', 'noopener'))}
+					aria-disabled={!to}
+					href={to?.url}
+					target="_blank"
+					rel="noopener"
+					onclick={(e) => leave(e, !!to)}
 				>
 					{to && !to.exact ? item.search_label : item.label}
-				</button>
+				</a>
 			{/each}
 			{#if menu.copy}
 				<div class="gap" role="separator"></div>
-				<button role="menuitem" class="copy" class:copied onclick={copy}>
+				<button class="item copy" role="menuitem" class:copied onclick={copy}>
 					{#key copied}
 						<span class="swap">{copied ? 'copied' : 'copy name'}</span>
 					{/key}
@@ -186,8 +196,11 @@
 	.menu:focus {
 		outline: none;
 	}
-	button {
+	.item {
+		display: flex;
+		align-items: center;
 		height: 44px;
+		text-decoration: none;
 		padding: 0 14px;
 		border-radius: calc(var(--r-md) - 6px);
 		font-size: var(--fs-sm);
@@ -196,9 +209,9 @@
 			background-color var(--t-in) var(--ease-ui),
 			color var(--t-out) var(--ease-ui);
 	}
-	button:hover:not(:disabled),
-	button:focus-visible,
-	.menu :global(button[data-armed]) {
+	.item:hover:not(.looking),
+	.item:focus-visible,
+	.menu :global(.item[data-armed]) {
 		background: var(--wash);
 		outline: none;
 	}
@@ -218,7 +231,7 @@
 	.copied .swap {
 		animation: swap_in var(--t-out) var(--ease);
 	}
-	button.looking {
+	.item.looking {
 		color: var(--muted);
 		opacity: var(--tone-off);
 		cursor: default;
