@@ -75,6 +75,7 @@
 		<span class="tip end wide below" role="tooltip" id="about_page">
 			<strong>updated {ago(data.updated, clock.now)}</strong>
 			<span>straight from my spotify, with previews from deezer and itunes</span>
+			<span>if ever gets outdated, my spotify subscription must've died. rip.</span>
 		</span>
 	</button>
 </div>
