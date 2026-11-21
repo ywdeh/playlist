@@ -1,27 +1,10 @@
 <script lang="ts">
 	import { fly } from 'svelte/transition';
 	import { ease, T_IN } from '#lib/motion';
-	import { close_menu, menu, spotify_link, type SpotifyTarget } from '#lib/menu.svelte';
+	import { close_menu, menu, spotify_href } from '#lib/menu.svelte';
 
 	let el = $state<HTMLElement>();
 	let pos = $state({ x: 0, y: 0 });
-	let found = $state<(SpotifyTarget | undefined)[]>([]);
-
-	$effect(() => {
-		const items = menu.spotify;
-		void menu.id;
-		found = items.map(() => undefined);
-		if (!menu.open) return;
-		let live = true;
-		items.forEach((q, i) =>
-			spotify_link(q).then((url) => {
-				if (live) found[i] = url;
-			})
-		);
-		return () => {
-			live = false;
-		};
-	});
 
 	$effect(() => {
 		void menu.id;
@@ -168,16 +151,9 @@
 				<button class="item" role="menuitem" onclick={() => run(item.run)}>{item.label}</button>
 			{/each}
 			{#if menu.items.length && menu.spotify.length}<div class="gap" role="separator"></div>{/if}
-			{#each menu.spotify as item, i (item.label)}
-				{@const to = found[i]}
-				<button
-					class="item"
-					role="menuitem"
-					class:looking={!to}
-					disabled={!to}
-					onclick={() => to && run(() => window.open(to.url, '_blank', 'noopener'))}
-				>
-					{to && !to.exact ? item.search_label : item.label}
+			{#each menu.spotify as item (item.label)}
+				<button class="item" role="menuitem" onclick={() => run(() => window.open(spotify_href(item), '_blank', 'noopener'))}>
+					{item.url ? item.label : item.search_label}
 				</button>
 			{/each}
 			{#if menu.copy}
@@ -218,7 +194,7 @@
 			background-color var(--t-in) var(--ease-ui),
 			color var(--t-out) var(--ease-ui);
 	}
-	.item:hover:not(.looking),
+	.item:hover,
 	.item:focus-visible,
 	.menu :global(.item[data-armed]) {
 		background: var(--wash);
@@ -239,10 +215,4 @@
 	}
 	.copied .swap {
 		animation: swap_in var(--t-out) var(--ease);
-	}
-	.item.looking {
-		color: var(--muted);
-		opacity: var(--tone-off);
-		cursor: default;
-	}
-</style>
+	}</style>

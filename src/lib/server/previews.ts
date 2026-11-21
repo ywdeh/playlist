@@ -1,4 +1,4 @@
-import { best, norm, same_title } from '#lib/match';
+import { best, norm } from '#lib/match';
 import type { Preview, QueueItem } from '#lib/player_types';
 
 const memory = new Map<string, { expires: number; value: unknown }>();
@@ -185,102 +185,6 @@ export async function with_info<L extends { name: string; artist: string; album?
 			return { ...s, album: s.album || info.album, duration: info.duration };
 		})
 	) as { [K in keyof L]: (L[K][number] & SongInfo)[] };
-}
-
-const WIKI = 'https://www.wikidata.org/w/api.php';
-const AGENT = 'ListeningShelf/1.0 ( personal music site )';
-
-async function wikidata_id(
-	label: string,
-	property: 'P1902' | 'P2207',
-	fits: (description: string) => boolean,
-	unique = false
-) {
-	const search = await get_json(
-		`${WIKI}?action=wbsearchentities&search=${encodeURIComponent(label)}&language=en&type=item&limit=10&format=json`,
-		AGENT
-	);
-	const want = norm(label);
-	const items = (search.search ?? []).filter(
-		(i: any) => (norm(i.label ?? '') === want || norm(i.match?.text ?? '') === want) && fits(i.description ?? '')
-	);
-	if (!items.length) return null;
-	const ids = items.map((i: any) => i.id).join('|');
-	const full = await get_json(`${WIKI}?action=wbgetentities&ids=${ids}&props=claims&format=json`, AGENT);
-	const found = new Set<string>();
-	for (const i of items) {
-		const id = full.entities?.[i.id]?.claims?.[property]?.[0]?.mainsnak?.datavalue?.value;
-		if (typeof id === 'string') {
-			if (!unique) return id;
-			found.add(id);
-		}
-	}
-	return found.size === 1 ? [...found][0] : null;
-}
-
-let musicbrainz_queue = Promise.resolve();
-function musicbrainz(url: string): Promise<any> {
-	const run = musicbrainz_queue.then(() => get_json(url, AGENT));
-	musicbrainz_queue = run.then(
-		() => new Promise((r) => setTimeout(r, 1100)),
-		() => new Promise((r) => setTimeout(r, 1100))
-	);
-	return run;
-}
-
-const quoted = (s: string) => `"${s.replace(/["\\]/g, '')}"`;
-
-async function musicbrainz_artist_by_songs(artist: string, songs: string[]): Promise<string | null> {
-	for (const song of songs.slice(0, 2)) {
-		const query = encodeURIComponent(`recording:${quoted(song)} AND artist:${quoted(artist)}`);
-		const search = await musicbrainz(`https://musicbrainz.org/ws/2/recording?query=${query}&fmt=json&limit=10`);
-		for (const rec of search.recordings ?? []) {
-			if (!same_title(song, rec.title ?? '')) continue;
-			const credit = (rec['artist-credit'] ?? []).find((c: any) => norm(c.artist?.name ?? c.name ?? '') === norm(artist));
-			if (credit?.artist?.id) return credit.artist.id as string;
-		}
-	}
-	return null;
-}
-
-async function musicbrainz_artist_by_name(artist: string): Promise<string | null> {
-	const query = encodeURIComponent(`artist:${quoted(artist)}`);
-	const search = await musicbrainz(`https://musicbrainz.org/ws/2/artist?query=${query}&fmt=json&limit=10`);
-	const exact = (search.artists ?? []).filter((a: any) => norm(a.name) === norm(artist) && (a.score ?? 0) >= 90);
-	return exact.length === 1 ? exact[0].id : null;
-}
-
-async function musicbrainz_spotify(id: string): Promise<string | null> {
-	const full = await musicbrainz(`https://musicbrainz.org/ws/2/artist/${id}?inc=url-rels&fmt=json`);
-	const link = (full.relations ?? [])
-		.map((r: any) => r.url?.resource as string | undefined)
-		.find((u: string | undefined) => u && /^https:\/\/open\.spotify\.com\/artist\//.test(u));
-	return link ?? null;
-}
-
-async function spotify_artist(artist: string, songs: string[]): Promise<string | null> {
-	if (songs.length) {
-		const id = await musicbrainz_artist_by_songs(artist, songs);
-		const link = id ? await musicbrainz_spotify(id) : null;
-		if (link) return link;
-	}
-	const namesakes = await deezer_namesakes(artist).catch(() => []);
-	if (namesakes.length > 1) return null;
-	const id = await wikidata_id(artist, 'P1902', () => true, true).catch(() => null);
-	if (id) return `https://open.spotify.com/artist/${id}`;
-	const mb = await musicbrainz_artist_by_name(artist);
-	return mb ? musicbrainz_spotify(mb) : null;
-}
-
-async function spotify_song(name: string, artist: string): Promise<string | null> {
-	const by = norm(artist);
-	const id = await wikidata_id(name, 'P2207', (d) => norm(d).includes(by));
-	return id ? `https://open.spotify.com/track/${id}` : null;
-}
-
-export function find_spotify(artist: string, name?: string, songs: string[] = []): Promise<string | null> {
-	const key = name ? `spotify:${norm(artist)}:${norm(name)}` : `spotify2:${norm(artist)}:`;
-	return edge_cached(key, 7 * 86400, () => (name ? spotify_song(name, artist) : spotify_artist(artist, songs)));
 }
 
 async function deezer_namesakes(name: string): Promise<any[]> {

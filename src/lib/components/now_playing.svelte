@@ -71,6 +71,7 @@
 					name: song.name,
 					artist: song.artist,
 					spotify: song.spotify,
+					artist_spotify: song.artist_spotify,
 					play: () => player.play([song], 0)
 				}))}
 			>

@@ -39,7 +39,7 @@
 		title={muted ? 'not available to play' : undefined}
 		{@attach playable.watch(() => song)}
 		{@attach tint_on_hover(() => cover_url(image, artist, name))}
-		{@attach song_menu(() => ({ name, artist, play: onplay, spotify: song.spotify }))}
+		{@attach song_menu(() => ({ name, artist, play: onplay, spotify: song.spotify, artist_spotify: song.artist_spotify }))}
 	>
 		{#if pinned}
 			<span class="rank heart tip_anchor" aria-label="One of my favourites">

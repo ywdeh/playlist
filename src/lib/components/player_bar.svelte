@@ -154,7 +154,13 @@
 	const REPEAT_LABEL: Record<Repeat, string> = { off: 'repeat this song', one: 'repeating this song' };
 	const song_item = () => {
 		const c = player.current;
-		return { name: c?.name ?? shown_name, artist: c?.artist ?? shown_artist, play: () => player.toggle() };
+		return {
+			name: c?.name ?? shown_name,
+			artist: c?.artist ?? shown_artist,
+			spotify: c?.spotify,
+			artist_spotify: c?.artist_spotify,
+			play: () => player.toggle()
+		};
 	};
 
 	const shown_name = $derived(player.current?.name ?? player.track?.name ?? '');

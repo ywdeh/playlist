@@ -17,6 +17,7 @@ export interface Song {
 	album?: string | null;
 	duration?: number | null;
 	spotify?: string;
+	artist_spotify?: string;
 	isrc?: string;
 	played?: string;
 }

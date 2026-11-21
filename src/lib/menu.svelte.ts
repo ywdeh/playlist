@@ -124,16 +124,24 @@ export function context_menu(build: () => MenuParts) {
 export const artist_path = (artist: string) => `/artist/${encodeURIComponent(artist)}`;
 const on_artist_page = (artist: string) => decodeURIComponent(page.url.pathname) === `/artist/${artist}`;
 
-export function song_menu(song: () => { name: string; artist: string; play: () => void; spotify?: string }) {
+export interface MenuSong {
+	name: string;
+	artist: string;
+	play: () => void;
+	spotify?: string;
+	artist_spotify?: string;
+}
+
+export function song_menu(song: () => MenuSong) {
 	return context_menu(() => {
-		const { name, artist, play, spotify } = song();
+		const { name, artist, play, spotify, artist_spotify } = song();
 		const items: MenuItem[] = [{ label: 'play', run: play }];
 		if (!on_artist_page(artist)) items.push({ label: 'go to artist', run: () => goto(artist_path(artist)) });
 		return {
 			items,
 			spotify: [
 				{ label: 'open in spotify', search_label: 'search on spotify', artist, name, url: spotify },
-				{ label: 'open artist in spotify', search_label: 'search artist on spotify', artist }
+				{ label: 'open artist in spotify', search_label: 'search artist on spotify', artist, url: artist_spotify }
 			],
 			copy: `${name} by ${artist}`
 		};
@@ -148,34 +156,8 @@ export function artist_menu(target: () => { artist: string; spotify?: string }) 
 	});
 }
 
-export interface SpotifyTarget {
-	url: string;
-	exact: boolean;
-}
-
-const links = new Map<string, Promise<SpotifyTarget>>();
-
-const spotify_search = (artist: string, name?: string): SpotifyTarget => ({
-	url: name
+export const spotify_href = ({ artist, name, url }: SpotifyItem) =>
+	url ??
+	(name
 		? `https://open.spotify.com/search/${encodeURIComponent(`${name} ${artist}`)}`
-		: `https://open.spotify.com/search/${encodeURIComponent(artist)}/artists`,
-	exact: false
-});
-
-export function spotify_link(q: { artist: string; name?: string; url?: string }): Promise<SpotifyTarget> {
-	if (q.url) return Promise.resolve({ url: q.url, exact: true });
-	const key = `${q.artist}\u0000${q.name ?? ''}`.toLowerCase();
-	let p = links.get(key);
-	if (!p) {
-		const params = new URLSearchParams(q.name ? { artist: q.artist, name: q.name } : { artist: q.artist });
-		p = fetch(`/api/spotify?${params}`)
-			.then((r) => (r.ok ? r.json() : { url: null }))
-			.then((j: { url: string | null }) => (j.url ? { url: j.url, exact: true } : spotify_search(q.artist, q.name)))
-			.catch(() => {
-				links.delete(key);
-				return spotify_search(q.artist, q.name);
-			});
-		links.set(key, p);
-	}
-	return p;
-}
+		: `https://open.spotify.com/search/${encodeURIComponent(artist)}/artists`);

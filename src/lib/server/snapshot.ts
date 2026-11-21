@@ -1,9 +1,15 @@
 import { env, waitUntil } from 'cloudflare:workers';
 
-const SAVE_EVERY_MS = 15 * 60_000;
-const saved_at = new Map<string, number>();
+const REREAD_MS = 30_000;
+const RETRY_MS = 60_000;
 
-function store() {
+type Stored<T> = { at: number; value: T };
+
+const memory = new Map<string, Stored<unknown> & { read: number }>();
+const loading = new Map<string, Promise<unknown>>();
+const tried = new Map<string, number>();
+
+function kv() {
 	try {
 		return env.SNAPSHOTS;
 	} catch {
@@ -11,30 +17,43 @@ function store() {
 	}
 }
 
-function save(key: string, value: unknown) {
-	const kv = store();
-	const last = saved_at.get(key) ?? 0;
-	if (!kv || Date.now() - last < SAVE_EVERY_MS) return;
-	saved_at.set(key, Date.now());
-	waitUntil(kv.put(`snapshot:${key}`, JSON.stringify(value)).catch(() => saved_at.delete(key)));
+async function read<T>(key: string): Promise<Stored<T> | null> {
+	const hit = memory.get(key);
+	if (hit && Date.now() - hit.read < REREAD_MS) return hit as Stored<T>;
+	const found = ((await kv()?.get(`stored:${key}`, 'json').catch(() => null)) ?? null) as Stored<T> | null;
+	if (found) memory.set(key, { ...found, read: Date.now() });
+	return found ?? (hit as Stored<T> | undefined) ?? null;
 }
 
-async function read<T>(key: string): Promise<T | null> {
-	const kv = store();
-	if (!kv) return null;
-	return ((await kv.get(`snapshot:${key}`, 'json').catch(() => null)) as T | null) ?? null;
+function load<T>(key: string, fetch: () => Promise<T>): Promise<T> {
+	const running = loading.get(key);
+	if (running) return running as Promise<T>;
+	tried.set(key, Date.now());
+	const p = fetch()
+		.then(async (value) => {
+			const entry = { at: Date.now(), value };
+			memory.set(key, { ...entry, read: Date.now() });
+			await kv()?.put(`stored:${key}`, JSON.stringify(entry)).catch(() => {});
+			return value;
+		})
+		.finally(() => loading.delete(key));
+	loading.set(key, p);
+	return p;
 }
 
-export async function with_snapshot<T>(key: string, load: () => Promise<T>, falls_back: (e: unknown) => boolean): Promise<T> {
-	try {
-		const value = await load();
-		save(key, value);
-		return value;
-	} catch (e) {
-		if (!falls_back(e)) throw e;
-		const last = await read<T>(key);
-		if (last === null) throw e;
-		console.error(`serving snapshot ${key}:`, e instanceof Error ? e.message : e);
-		return last;
+export async function stored<T>(key: string, max_age_s: number, fetch: () => Promise<T>): Promise<T> {
+	const last = await read<T>(key);
+	if (!last) {
+		const legacy = kv()?.get(`snapshot:${key}`, 'json').catch(() => null) as Promise<T | null> | undefined;
+		return load(key, fetch).catch(async (e) => {
+			const old = await legacy;
+			if (old == null) throw e;
+			return old;
+		});
 	}
+	const stale = Date.now() - last.at > max_age_s * 1000;
+	if (stale && Date.now() - (tried.get(key) ?? 0) > RETRY_MS) {
+		waitUntil(load(key, fetch).catch((e) => console.error(`refreshing ${key}:`, e instanceof Error ? e.message : e)));
+	}
+	return last.value;
 }

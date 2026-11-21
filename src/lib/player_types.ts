@@ -5,6 +5,8 @@ export interface QueueItem {
 	image?: string | null;
 	album?: string | null;
 	isrc?: string;
+	spotify?: string;
+	artist_spotify?: string;
 }
 
 export interface Preview {
