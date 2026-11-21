@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { fly } from 'svelte/transition';
 	import { ease, T_IN } from '#lib/motion';
-	import { close_menu, menu, spotify_link, type SpotifyTarget } from '#lib/menu.svelte';
+	import { close_menu, menu, spotify_link, type SpotifyItem, type SpotifyTarget } from '#lib/menu.svelte';
 
 	let el = $state<HTMLElement>();
 	let pos = $state({ x: 0, y: 0 });
@@ -83,9 +83,12 @@
 		};
 	});
 
-	function leave(e: MouseEvent, ready: boolean) {
-		if (ready) setTimeout(close_menu);
-		else e.preventDefault();
+	const touch = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+
+	function open_spotify(item: SpotifyItem, to: SpotifyTarget | undefined) {
+		close_menu();
+		if (!touch && to) return void window.open(to.url, '_blank', 'noopener');
+		if (touch) spotify_link(item).then((t) => location.assign(t.url));
 	}
 
 	function run(fn: () => void) {
@@ -157,18 +160,15 @@
 			{#if menu.items.length && menu.spotify.length}<div class="gap" role="separator"></div>{/if}
 			{#each menu.spotify as item, i (item.label)}
 				{@const to = found[i]}
-				<a
+				<button
 					class="item"
 					role="menuitem"
 					class:looking={!to}
-					aria-disabled={!to}
-					href={to?.url}
-					target="_blank"
-					rel="noopener"
-					onclick={(e) => leave(e, !!to)}
+					disabled={!to && !touch}
+					onclick={() => open_spotify(item, to)}
 				>
 					{to && !to.exact ? item.search_label : item.label}
-				</a>
+				</button>
 			{/each}
 			{#if menu.copy}
 				<div class="gap" role="separator"></div>
@@ -200,7 +200,6 @@
 		display: flex;
 		align-items: center;
 		height: 44px;
-		text-decoration: none;
 		padding: 0 14px;
 		border-radius: calc(var(--r-md) - 6px);
 		font-size: var(--fs-sm);
