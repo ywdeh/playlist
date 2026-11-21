@@ -107,7 +107,7 @@
 		const { name, artist } = player.current;
 		return shown_cover ?? `/api/art?${new URLSearchParams({ artist, name })}`;
 	});
-	playing_tint(() => cover_src);
+	playing_tint(() => cover_src, () => player.playing);
 
 	let scrub = $state<number | null>(null);
 	const shown_pct = $derived(scrub !== null ? scrub * 100 : pct);

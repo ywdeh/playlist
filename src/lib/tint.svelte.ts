@@ -4,9 +4,16 @@ const HOVER_IN_MS = 180;
 const HOVER_OUT_MS = 360;
 const MIST = ['--mist', '--mist-target'];
 
-const sources = $state<{ hover: string | null; song: string | null | undefined; live: string | null; page: string | null }>({
+const sources = $state<{
+	hover: string | null;
+	song: string | null | undefined;
+	playing: boolean;
+	live: string | null;
+	page: string | null;
+}>({
 	hover: null,
 	song: null,
+	playing: false,
 	live: null,
 	page: null
 });
@@ -26,10 +33,14 @@ function layer(key: 'live' | 'page') {
 export const page_tint = layer('page');
 export const live_tint = layer('live');
 
-export function playing_tint(picture: () => string | null | undefined) {
+export function playing_tint(picture: () => string | null | undefined, playing: () => boolean) {
 	$effect.pre(() => {
 		sources.song = picture();
-		return () => (sources.song = null);
+		sources.playing = playing();
+		return () => {
+			sources.song = null;
+			sources.playing = false;
+		};
 	});
 }
 
@@ -64,9 +75,9 @@ export function tint_root() {
 		fade_ms = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--t-tint')) * 1000 || 0;
 	});
 	$effect(() => {
-		const { hover, song, live, page } = sources;
+		const { hover, song, playing, live, page } = sources;
 		if (!hover && song === undefined) return;
-		const src = hover ?? song ?? live ?? page;
+		const src = hover ?? (playing ? song : null) ?? live ?? page ?? song;
 		const apply = (colour: string | null) => {
 			if (colour || !hover) paint(colour);
 		};
