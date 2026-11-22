@@ -22,29 +22,36 @@ export class SpotifyError extends Error {
 const COOL_MIN_S = 5;
 const COOL_MAX_S = 86400;
 const COOL_READ_MS = 60_000;
-let cool_until = 0;
-let cool_read = 0;
+const cools = new Map<string, { until: number; read: number }>();
 
-async function cooling() {
-	if (Date.now() - cool_read > COOL_READ_MS) {
-		cool_read = Date.now();
-		cool_until = Math.max(cool_until, Number(await shared_get('cool')) || 0);
+const endpoint = (path: string) => path.split('?')[0].replace(/\/\w{22}$/, '');
+
+async function cooling(where: string) {
+	const key = endpoint(where);
+	const cool = cools.get(key) ?? { until: 0, read: 0 };
+	if (Date.now() - cool.read > COOL_READ_MS) {
+		cool.read = Date.now();
+		cool.until = Math.max(cool.until, Number(await shared_get(`cool:${key}`)) || 0);
+		cools.set(key, cool);
 	}
-	return Date.now() < cool_until;
+	if (Date.now() < cool.until) throw new SpotifyError(429, 'Too many requests');
 }
 
 function cool_down(res: Response, where: string) {
 	if (res.status !== 429) return;
+	const key = endpoint(where);
 	const wait = Math.min(Math.max(Number(res.headers.get('retry-after')) || COOL_MIN_S, COOL_MIN_S), COOL_MAX_S);
-	console.error(`spotify rate limited on ${where}, retry after ${wait}s`);
-	cool_until = Math.max(cool_until, Date.now() + wait * 1000);
-	shared_put('cool', String(cool_until), wait);
+	console.error(`spotify rate limited on ${key}, retry after ${wait}s`);
+	const until = Math.max(cools.get(key)?.until ?? 0, Date.now() + wait * 1000);
+	cools.set(key, { until, read: Date.now() });
+	shared_put(`cool:${key}`, String(until), wait);
 }
 
 const basic = () => `Basic ${btoa(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`)}`;
 
 async function grant(body: Record<string, string>) {
 	if (!SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET) throw new SpotifyError(0, 'SPOTIFY_CLIENT_ID or SPOTIFY_CLIENT_SECRET is not set');
+	await cooling('sign-in');
 	const res = await fetch(`${ACCOUNTS}/api/token`, {
 		method: 'POST',
 		headers: { Authorization: basic(), 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -86,7 +93,7 @@ type Entry = { at: number; value: any };
 const memory = new Map<string, Entry & { expires: number }>();
 
 async function fetch_api(path: string, retry = true): Promise<any> {
-	if (await cooling()) throw new SpotifyError(429, 'Too many requests');
+	await cooling(path);
 	const res = await fetch(`${API}${path}`, { headers: { Authorization: `Bearer ${await access_token()}` } });
 	if (res.status === 401 && retry) {
 		token = null;
