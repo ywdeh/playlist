@@ -19,6 +19,17 @@ export class SpotifyError extends Error {
 	}
 }
 
+const COOL_MIN_S = 5;
+const COOL_MAX_S = 3600;
+let cool_until = 0;
+
+function cool_down(res: Response, where: string) {
+	if (res.status !== 429) return;
+	const wait = Number(res.headers.get('retry-after')) || COOL_MIN_S;
+	console.error(`spotify rate limited on ${where}, retry after ${wait}s`);
+	cool_until = Date.now() + Math.min(Math.max(wait, COOL_MIN_S), COOL_MAX_S) * 1000;
+}
+
 const basic = () => `Basic ${btoa(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`)}`;
 
 async function grant(body: Record<string, string>) {
@@ -28,6 +39,7 @@ async function grant(body: Record<string, string>) {
 		headers: { Authorization: basic(), 'Content-Type': 'application/x-www-form-urlencoded' },
 		body: new URLSearchParams(body)
 	});
+	cool_down(res, 'sign-in');
 	const json = (await res.json().catch(() => null)) as any;
 	if (!res.ok || !json?.access_token) throw new SpotifyError(res.status, json?.error_description ?? 'Spotify sign-in failed');
 	return json as { access_token: string; refresh_token?: string; expires_in: number };
@@ -67,9 +79,6 @@ type Entry = { at: number; value: any };
 const memory = new Map<string, Entry & { expires: number }>();
 const inflight = new Map<string, Promise<Entry>>();
 
-const COOL_MIN_S = 5;
-const COOL_MAX_S = 3600;
-let cool_until = 0;
 
 async function fetch_api(path: string, retry = true): Promise<any> {
 	if (Date.now() < cool_until) throw new SpotifyError(429, 'Too many requests');
@@ -78,10 +87,7 @@ async function fetch_api(path: string, retry = true): Promise<any> {
 		token = null;
 		return fetch_api(path, false);
 	}
-	if (res.status === 429) {
-		const wait = Number(res.headers.get('retry-after')) || COOL_MIN_S;
-		cool_until = Date.now() + Math.min(Math.max(wait, COOL_MIN_S), COOL_MAX_S) * 1000;
-	}
+	cool_down(res, path);
 	if (res.status === 204) return null;
 	const json = (await res.json().catch(() => null)) as any;
 	if (!res.ok) throw new SpotifyError(res.status, json?.error?.message ?? `upstream ${res.status}`);
