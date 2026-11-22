@@ -6,7 +6,7 @@
 	import NowPlaying from './now_playing.svelte';
 	import { PERIODS, PERIOD_LABELS, type LiveData, type Period, type Playlist, type Top } from '#lib/music';
 	import { player } from '#lib/player.svelte';
-	import { cover_url, tint_on_hover } from '#lib/tint.svelte';
+	import { cover_url, page_tint, tint_on_hover } from '#lib/tint.svelte';
 	import { link } from '#lib/link';
 	import { artist_menu, artist_path, song_menu } from '#lib/menu.svelte';
 	import { reveal } from '#lib/reveal';
@@ -32,6 +32,10 @@
 	const top = $derived<Top>(picked ?? data);
 	const ranked = $derived(top.tracks.filter((t) => !pinned_keys.has(song_key(t))));
 	const queue = $derived([...ranked, ...pinned]);
+
+	const best = $derived(top.tracks[0]);
+	const backdrop = $derived(best ? cover_url(best.image, best.artist, best.name) : null);
+	page_tint(() => backdrop);
 
 	const shown = $derived(pending ?? top.period);
 	const loaded = new Map<Period, Top>();
@@ -65,6 +69,8 @@
 		if (p) picked = await fetch_top(p).catch(() => picked);
 	});
 </script>
+
+<div class="glow" aria-hidden="true"></div>
 
 <div class="title cascade" style:--i={0}>
 	<h1>{title}</h1>
@@ -150,6 +156,21 @@
 {/if}
 
 <style>
+	.glow {
+		position: absolute;
+		inset: 0 0 auto;
+		z-index: -1;
+		height: min(100svh, 820px);
+		pointer-events: none;
+		background: var(--mist);
+		opacity: 0.025;
+		mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' result='f'/%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.45' numOctaves='2' seed='3'/%3E%3CfeComposite in2='f' operator='arithmetic' k2='.6' k3='.4'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 2.6 0 0 0 -.8' result='m'/%3E%3CfeComposite in='SourceGraphic' in2='m' operator='arithmetic' k2='4.3' k3='3.6' k4='-3.6'/%3E%3C/filter%3E%3CradialGradient id='g' cx='.5' cy='1' r='1.1'%3E%3Cstop offset='.5' stop-color='%23fff' stop-opacity='0'/%3E%3Cstop offset='.575' stop-color='%23fff' stop-opacity='.15'/%3E%3Cstop offset='.7' stop-color='%23fff' stop-opacity='.45'/%3E%3Cstop offset='.85' stop-color='%23fff' stop-opacity='.8'/%3E%3Cstop offset='1' stop-color='%23fff' stop-opacity='1'/%3E%3C/radialGradient%3E%3Crect width='100%25' height='100%25' fill='url(%23g)' filter='url(%23n)'/%3E%3C/svg%3E") 0 0 / 100% 100%;
+	}
+	@media (max-width: 520px) {
+		.glow {
+			height: 70svh;
+		}
+	}
 	.title {
 		display: flex;
 		align-items: center;

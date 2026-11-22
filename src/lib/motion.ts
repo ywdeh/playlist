@@ -1,7 +1,6 @@
 export const T_IN = 200;
 export const T_OUT = 340;
 export const T_MOVE = 550;
-
 function bezier(x1: number, y1: number, x2: number, y2: number) {
 	const curve = (t: number, p1: number, p2: number) => 3 * (1 - t) ** 2 * t * p1 + 3 * (1 - t) * t ** 2 * p2 + t ** 3;
 	const slope = (t: number, p1: number, p2: number) =>

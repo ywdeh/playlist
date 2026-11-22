@@ -46,9 +46,9 @@
 		left: 0;
 		right: 0;
 		z-index: 15;
-		height: 1.5rem;
+		height: 2.5rem;
 		pointer-events: none;
-		background: linear-gradient(var(--bg), transparent);
+		background: radial-gradient(75% 100% at 50% 100%, transparent 50%, color-mix(in srgb, var(--bg) 45%, transparent) 75%, var(--bg));
 	}
 	.top {
 		top: 0;
