@@ -6,7 +6,6 @@ const RETRY_MS = 60_000;
 type Stored<T> = { at: number; value: T };
 
 const memory = new Map<string, Stored<unknown> & { read: number }>();
-const loading = new Map<string, Promise<unknown>>();
 const tried = new Map<string, number>();
 
 function kv() {
@@ -25,20 +24,13 @@ async function read<T>(key: string): Promise<Stored<T> | null> {
 	return found ?? (hit as Stored<T> | undefined) ?? null;
 }
 
-function load<T>(key: string, fetch: () => Promise<T>): Promise<T> {
-	const running = loading.get(key);
-	if (running) return running as Promise<T>;
+async function load<T>(key: string, fetch: () => Promise<T>): Promise<T> {
 	tried.set(key, Date.now());
-	const p = fetch()
-		.then(async (value) => {
-			const entry = { at: Date.now(), value };
-			memory.set(key, { ...entry, read: Date.now() });
-			await kv()?.put(`stored:${key}`, JSON.stringify(entry)).catch(() => {});
-			return value;
-		})
-		.finally(() => loading.delete(key));
-	loading.set(key, p);
-	return p;
+	const value = await fetch();
+	const entry = { at: Date.now(), value };
+	memory.set(key, { ...entry, read: Date.now() });
+	await kv()?.put(`stored:${key}`, JSON.stringify(entry)).catch(() => {});
+	return value;
 }
 
 export async function stored<T>(key: string, max_age_s: number, fetch: () => Promise<T>): Promise<T> {

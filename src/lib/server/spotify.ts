@@ -49,17 +49,13 @@ export const exchange_code = (code: string, redirect_uri: string) =>
 	grant({ grant_type: 'authorization_code', code, redirect_uri });
 
 let token: { value: string; expires: number } | null = null;
-let pending_token: Promise<string> | null = null;
 
-function access_token(): Promise<string> {
-	if (token && token.expires > Date.now() + 30_000) return Promise.resolve(token.value);
-	pending_token ??= (async () => {
-		if (!SPOTIFY_REFRESH_TOKEN) throw new SpotifyError(0, 'SPOTIFY_REFRESH_TOKEN is not set');
-		const json = await grant({ grant_type: 'refresh_token', refresh_token: SPOTIFY_REFRESH_TOKEN });
-		token = { value: json.access_token, expires: Date.now() + json.expires_in * 1000 };
-		return token.value;
-	})().finally(() => (pending_token = null));
-	return pending_token;
+async function access_token(): Promise<string> {
+	if (token && token.expires > Date.now() + 30_000) return token.value;
+	if (!SPOTIFY_REFRESH_TOKEN) throw new SpotifyError(0, 'SPOTIFY_REFRESH_TOKEN is not set');
+	const json = await grant({ grant_type: 'refresh_token', refresh_token: SPOTIFY_REFRESH_TOKEN });
+	token = { value: json.access_token, expires: Date.now() + json.expires_in * 1000 };
+	return token.value;
 }
 
 const TTL = {
@@ -77,8 +73,6 @@ const period_ttl = (period: Period) => (period === 'short_term' ? TTL.month : TT
 type Entry = { at: number; value: any };
 
 const memory = new Map<string, Entry & { expires: number }>();
-const inflight = new Map<string, Promise<Entry>>();
-
 
 async function fetch_api(path: string, retry = true): Promise<any> {
 	if (Date.now() < cool_until) throw new SpotifyError(429, 'Too many requests');
@@ -94,39 +88,31 @@ async function fetch_api(path: string, retry = true): Promise<any> {
 	return json;
 }
 
-function cached_entry(path: string, ttl_seconds: number): Promise<Entry> {
+async function cached_entry(path: string, ttl_seconds: number): Promise<Entry> {
 	const key = `https://spotify.cache/v2${path}`;
 	const hit = memory.get(key);
-	if (hit && hit.expires > Date.now()) return Promise.resolve(hit);
-	const running = inflight.get(key);
-	if (running) return running;
-
-	const promise = (async () => {
-		const edge = (globalThis as { caches?: { default?: Cache } }).caches?.default;
-		const kept = edge ? await edge.match(key).catch(() => undefined) : undefined;
-		const entry: Entry = kept
-			? await kept.json()
-			: await fetch_api(path).then(
-					(value) => ({ at: Date.now(), value }),
-					(e) => {
-						if (hit) return hit;
-						throw e;
-					}
-				);
-		if (entry === hit) return hit;
-		memory.delete(key);
-		memory.set(key, { ...entry, expires: entry.at + ttl_seconds * 1000 });
-		if (memory.size > 500) memory.delete(memory.keys().next().value!);
-		if (edge && !kept) {
-			await edge
-				.put(key, new Response(JSON.stringify(entry), { headers: { 'Cache-Control': `max-age=${ttl_seconds}` } }))
-				.catch(() => {});
-		}
-		return entry;
-	})().finally(() => inflight.delete(key));
-
-	inflight.set(key, promise);
-	return promise;
+	if (hit && hit.expires > Date.now()) return hit;
+	const edge = (globalThis as { caches?: { default?: Cache } }).caches?.default;
+	const kept = edge ? await edge.match(key).catch(() => undefined) : undefined;
+	const entry: Entry = kept
+		? await kept.json()
+		: await fetch_api(path).then(
+				(value) => ({ at: Date.now(), value }),
+				(e) => {
+					if (hit) return hit;
+					throw e;
+				}
+			);
+	if (entry === hit) return hit;
+	memory.delete(key);
+	memory.set(key, { ...entry, expires: entry.at + ttl_seconds * 1000 });
+	if (memory.size > 500) memory.delete(memory.keys().next().value!);
+	if (edge && !kept) {
+		await edge
+			.put(key, new Response(JSON.stringify(entry), { headers: { 'Cache-Control': `max-age=${ttl_seconds}` } }))
+			.catch(() => {});
+	}
+	return entry;
 }
 
 const call = async (path: string, ttl_seconds: number) => (await cached_entry(path, ttl_seconds)).value;
@@ -225,7 +211,7 @@ async function get_live(): Promise<Omit<LiveData, 'now'>> {
 	};
 }
 
-let playing: { at: number; value: Promise<Live | null> } | null = null;
+let playing: { at: number; value: Live | null } | null = null;
 
 async function read_now_playing(): Promise<Live | null> {
 	const r = await fetch_api('/me/player/currently-playing');
@@ -249,13 +235,11 @@ async function shared_now_playing(): Promise<Live | null> {
 	return value;
 }
 
-export function get_now_playing(): Promise<Live | null> {
-	if (!playing || Date.now() - playing.at > TTL.now * 1000) {
-		const value = shared_now_playing();
-		playing = { at: Date.now(), value };
-		value.catch(() => (playing = null));
-	}
-	return playing.value;
+export async function get_now_playing(): Promise<Live | null> {
+	if (playing && Date.now() - playing.at <= TTL.now * 1000) return playing.value;
+	const value = await shared_now_playing();
+	playing = { at: Date.now(), value };
+	return value;
 }
 
 const PERIOD_ORDER = ['long_term', 'medium_term', 'short_term'] as const;

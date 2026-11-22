@@ -2,22 +2,14 @@ import { best, norm } from '#lib/match';
 import type { Preview, QueueItem } from '#lib/player_types';
 
 const memory = new Map<string, { expires: number; value: unknown }>();
-const inflight = new Map<string, Promise<unknown>>();
 
-function cached<T>(key: string, ttl_seconds: number, load: () => Promise<T>): Promise<T> {
+async function cached<T>(key: string, ttl_seconds: number, load: () => Promise<T>): Promise<T> {
 	const hit = memory.get(key);
-	if (hit && hit.expires > Date.now()) return Promise.resolve(hit.value as T);
-	const running = inflight.get(key);
-	if (running) return running as Promise<T>;
-	const p = load()
-		.then((value) => {
-			memory.set(key, { expires: Date.now() + ttl_seconds * 1000, value });
-			if (memory.size > 2000) memory.delete(memory.keys().next().value!);
-			return value;
-		})
-		.finally(() => inflight.delete(key));
-	inflight.set(key, p);
-	return p;
+	if (hit && hit.expires > Date.now()) return hit.value as T;
+	const value = await load();
+	memory.set(key, { expires: Date.now() + ttl_seconds * 1000, value });
+	if (memory.size > 2000) memory.delete(memory.keys().next().value!);
+	return value;
 }
 
 let deezer_next = 0;
