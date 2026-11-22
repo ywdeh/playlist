@@ -170,7 +170,7 @@
 		z-index: 90;
 		display: grid;
 		min-width: 248px;
-		padding: 6px;
+		padding: var(--gap-sm);
 		border-radius: var(--r-md);
 		background: var(--surface);
 		box-shadow: 0 18px 50px var(--shadow);
@@ -181,9 +181,9 @@
 	.item {
 		display: flex;
 		align-items: center;
-		height: 44px;
-		padding: 0 14px;
-		border-radius: calc(var(--r-md) - 6px);
+		height: var(--control-md);
+		padding: 0 var(--inset);
+		border-radius: var(--r-sm);
 		font-size: var(--fs-sm);
 		font-weight: var(--fw-ui);
 		transition:
@@ -197,9 +197,9 @@
 		outline: none;
 	}
 	.gap {
-		height: var(--rule);
-		margin: 6px 10px;
-		border-radius: var(--rule);
+		height: var(--stroke);
+		margin: var(--gap-sm) var(--gap-md);
+		border-radius: var(--stroke);
 		background: var(--wash);
 	}
 	.copy.copied {

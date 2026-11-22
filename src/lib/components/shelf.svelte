@@ -180,12 +180,12 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 16px;
-		margin-bottom: 26px;
+		gap: var(--gap-lg);
+		margin-bottom: var(--gap-2xl);
 	}
 	.arrows {
 		display: none;
-		gap: 8px;
+		gap: var(--gap-sm);
 	}
 	@media (hover: hover) and (pointer: fine) {
 		.arrows {
@@ -195,9 +195,9 @@
 	.arrow {
 		display: grid;
 		place-items: center;
-		width: 42px;
-		height: 42px;
-		border-radius: 50%;
+		width: var(--control-sm);
+		height: var(--control-sm);
+		border-radius: var(--r-pill);
 		background: var(--surface);
 		--press-scale: 0.9;
 	}
@@ -212,11 +212,11 @@
 		cursor: default;
 	}
 	.arrow svg {
-		width: 24px;
-		height: 24px;
+		width: var(--icon);
+		height: var(--icon);
 		fill: none;
 		stroke: currentColor;
-		stroke-width: 2px;
+		stroke-width: var(--stroke);
 		stroke-linecap: round;
 		stroke-linejoin: round;
 	}
@@ -224,13 +224,13 @@
 		display: grid;
 		grid-auto-flow: column;
 		grid-auto-columns: clamp(150px, 22vw, 196px);
-		gap: 28px;
+		gap: var(--gap-2xl);
 		overflow-x: auto;
 		overscroll-behavior-x: contain;
 		position: relative;
 		scrollbar-width: none;
-		margin: -8px calc(-1 * var(--gutter)) -8px;
-		padding: 8px var(--gutter) 14px;
+		margin: calc(-1 * var(--gap-sm)) calc(-1 * var(--gutter));
+		padding: var(--gap-sm) var(--gutter) var(--gap-lg);
 		cursor: grab;
 		--fade-start: var(--gutter);
 		--fade-end: var(--gutter);
@@ -267,7 +267,7 @@
 	@media (max-width: 520px) {
 		.shelf {
 			grid-auto-columns: 38vw;
-			gap: 16px;
+			gap: var(--gap-lg);
 		}
 	}
 	.shelf::-webkit-scrollbar {

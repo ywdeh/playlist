@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { fade, fly, slide } from 'svelte/transition';
-	import { ease, ease_in, settle, T_ENTER, T_MOVE, T_OUT } from '#lib/motion';
+	import { ease, ease_in, settle, T_MOVE, T_OUT } from '#lib/motion';
 	import Cover from './cover.svelte';
 	import { player } from '#lib/player.svelte';
 	import { playing_tint, tint_on_hover } from '#lib/tint.svelte';
@@ -232,7 +232,7 @@
 
 {#if player.current || player.message}
 	<div class="dock">
-		<div class="player" role="region" aria-label="Player" {@attach swipe} in:fly={{ y: 140, opacity: 1, duration: T_ENTER, easing: settle }}
+		<div class="player" role="region" aria-label="Player" {@attach swipe} in:fly={{ y: 140, opacity: 1, duration: T_MOVE, easing: settle }}
 			out:fly={{ y: 140, opacity: 1, duration: T_OUT, easing: ease_in }}>
 			<span class="grip" aria-hidden="true"></span>
 			<span class="halo" {@attach drift} {@attach hollow} aria-hidden="true">{#each WISPS as d (d)}
@@ -364,7 +364,7 @@
 		right: 0;
 		bottom: 0;
 		z-index: 20;
-		padding: 0 12px max(12px, env(safe-area-inset-bottom));
+		padding: 0 var(--gap-md) max(var(--gap-md), env(safe-area-inset-bottom));
 		pointer-events: none;
 	}
 	.player {
@@ -373,10 +373,10 @@
 		grid-template-columns: minmax(0, 1fr) minmax(0, 480px) minmax(0, 1fr);
 		grid-template-areas: 'info controls tools' 'info seek volume';
 		align-items: center;
-		gap: 2px 32px;
-		max-width: calc(1080px - 2 * var(--gutter) + 28px);
+		gap: var(--gap-2xs) var(--gap-3xl);
+		max-width: calc(1080px - 2 * var(--gutter) + 2 * var(--inset));
 		margin: 0 auto;
-		padding: 12px 16px 12px 12px;
+		padding: var(--gap-md) var(--gap-lg) var(--gap-md) var(--gap-md);
 		--cover-size: 72px;
 		position: relative;
 		border-radius: var(--r-lg);
@@ -399,7 +399,7 @@
 		grid-area: info;
 		display: flex;
 		align-items: center;
-		gap: 16px;
+		gap: var(--gap-lg);
 		min-width: 0;
 	}
 	.halo {
@@ -494,13 +494,13 @@
 			width: 36px;
 			height: 4px;
 			translate: -50% 0;
-			border-radius: 2px;
+			border-radius: var(--r-pill);
 			background: var(--tint);
 		}
 	}
 	.text {
 		display: grid;
-		gap: 2px;
+		gap: var(--gap-2xs);
 		min-width: 0;
 	}
 	.title {
@@ -537,7 +537,7 @@
 	.icon .line {
 		fill: none;
 		stroke: currentColor;
-		stroke-width: 2px;
+		stroke-width: var(--stroke);
 		stroke-linecap: round;
 		stroke-linejoin: round;
 	}
@@ -558,21 +558,21 @@
 		justify-self: center;
 		display: flex;
 		align-items: center;
-		gap: 12px;
+		gap: var(--gap-md);
 	}
 	.tools {
 		grid-area: tools;
 		justify-self: end;
 		display: flex;
 		align-items: center;
-		gap: 4px;
+		gap: var(--gap-xs);
 	}
 	.icon {
 		display: grid;
 		place-items: center;
-		width: 40px;
-		height: 40px;
-		border-radius: 50%;
+		width: var(--control-sm);
+		height: var(--control-sm);
+		border-radius: var(--r-pill);
 		--press-scale: 0.9;
 		color: var(--text);
 	}
@@ -589,27 +589,27 @@
 		cursor: default;
 	}
 	.icon svg {
-		width: 24px;
-		height: 24px;
+		width: var(--icon);
+		height: var(--icon);
 		fill: currentColor;
 		stroke: currentColor;
-		stroke-width: 2px;
+		stroke-width: var(--stroke);
 		stroke-linecap: round;
 		stroke-linejoin: round;
 	}
 	.icon.main {
-		width: 46px;
-		height: 46px;
+		width: var(--control-lg);
+		height: var(--control-lg);
 		background: var(--accent);
 		color: var(--accent-ink);
 	}
 	.volume {
 		display: flex;
 		align-items: center;
-		gap: 4px;
+		gap: var(--gap-xs);
 		grid-area: volume;
 		justify-self: end;
-		margin-right: 4px;
+		margin-right: var(--gap-xs);
 	}
 	.icon.speaker {
 		width: 32px;
@@ -618,7 +618,7 @@
 	.speaker svg {
 		fill: none;
 		stroke: currentColor;
-		stroke-width: 2px;
+		stroke-width: var(--stroke);
 		stroke-linecap: round;
 		stroke-linejoin: round;
 	}
@@ -658,7 +658,7 @@
 		grid-area: seek;
 		display: flex;
 		align-items: center;
-		gap: 12px;
+		gap: var(--gap-md);
 	}
 	.time {
 		flex: none;
@@ -688,13 +688,13 @@
 		inset: 0;
 		background: var(--accent);
 		clip-path: inset(0 var(--rest) 0 0 round var(--bar));
-		transition: clip-path var(--t-tick) linear;
+		transition: clip-path var(--t-out) linear;
 	}
 	.head {
 		position: absolute;
 		inset: 0;
 		pointer-events: none;
-		transition: translate var(--t-tick) linear;
+		transition: translate var(--t-out) linear;
 	}
 	.knob {
 		position: absolute;
@@ -703,7 +703,7 @@
 		width: 12px;
 		height: 12px;
 		margin: -6px 0 0 -6px;
-		border-radius: 50%;
+		border-radius: var(--r-pill);
 		background: var(--accent);
 		box-shadow: 0 2px 8px var(--shadow);
 		scale: 0;
@@ -725,9 +725,9 @@
 	.spin {
 		width: 18px;
 		height: 18px;
-		border: 2px solid currentColor;
+		border: var(--stroke) solid currentColor;
 		border-right-color: transparent;
-		border-radius: 50%;
+		border-radius: var(--r-pill);
 		animation: spin 0.7s linear infinite;
 	}
 	@keyframes spin {
@@ -739,20 +739,20 @@
 		.player {
 			grid-template-columns: minmax(0, 1fr) auto auto;
 			grid-template-areas: 'info controls tools' 'seek seek seek';
-			gap: 8px 16px;
+			gap: var(--gap-sm) var(--gap-lg);
 			--cover-size: 48px;
 		}
 		.seek {
-			padding: 0 4px 4px;
+			padding: 0 var(--gap-xs) var(--gap-xs);
 		}
 	}
 	@media (max-width: 520px) {
 		.player {
-			gap: 6px 8px;
-			padding: 10px 12px 10px 10px;
+			gap: var(--gap-sm);
+			padding: var(--gap-sm) var(--gap-md) var(--gap-sm) var(--gap-sm);
 		}
 		.controls {
-			gap: 4px;
+			gap: var(--gap-xs);
 		}
 		.close,
 		.prev {

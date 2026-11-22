@@ -71,10 +71,10 @@
 	.row {
 		display: flex;
 		align-items: center;
-		gap: 20px;
+		gap: var(--gap-xl);
 		width: 100%;
 		height: 88px;
-		padding: 12px 14px;
+		padding: var(--gap-md) var(--inset);
 		border-radius: var(--r-lg);
 		--press-scale: 0.985;
 	}
@@ -116,14 +116,14 @@
 		stroke-linejoin: round;
 	}
 	.heart path {
-		stroke-width: 2px;
+		stroke-width: var(--stroke);
 		vector-effect: non-scaling-stroke;
 	}
 	.text {
 		display: grid;
 		min-width: 0;
 		flex: 1.4 1 0;
-		gap: 2px;
+		gap: var(--gap-2xs);
 	}
 	.name {
 		font-size: var(--fs-lg);
@@ -153,14 +153,14 @@
 		white-space: nowrap;
 	}
 	.end :global(.eq) {
-		margin-right: 4px;
+		margin-right: var(--gap-xs);
 	}
 
 	@media (max-width: 720px) {
 		.row {
-			gap: 14px;
+			gap: var(--gap-md);
 			height: 72px;
-			padding: 10px 12px;
+			padding: var(--gap-sm) var(--inset);
 		}
 		.album {
 			display: none;

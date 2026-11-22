@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { T_ENTER } from '#lib/motion';
+	import { T_MOVE } from '#lib/motion';
 
 	let {
 		total,
@@ -10,7 +10,7 @@
 	}: { total: number; visible?: number; order?: number; children: Snippet } = $props();
 
 	const PEEK = 0.6;
-	const SLIDE_MS = T_ENTER;
+	const SLIDE_MS = T_MOVE;
 
 	let extra = $state(0);
 	const shown = $derived(Math.min(visible + extra, total));
@@ -122,7 +122,7 @@
 	}
 	.more {
 		position: relative;
-		margin-top: 22px;
+		margin-top: var(--gap-2xl);
 	}
 	.label {
 		animation: swap var(--t-out) var(--ease);

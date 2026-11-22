@@ -8,44 +8,16 @@
 	import { cover_url, live_tint, tint_on_hover } from '#lib/tint.svelte';
 	import { song_menu } from '#lib/menu.svelte';
 	import { length } from '#lib/format';
-	import { clock } from '#lib/live.svelte';
+	import { clock, every, NOW_EVERY_MS } from '#lib/live.svelte';
 
 	let { initial }: { initial: Live | null } = $props();
 
 	let track = $derived(initial);
 	live_tint(() => (track ? cover_url(track.image, track.artist, track.name) : null));
 
-	const PLAYING_MS = 15_000;
-	const IDLE_MS = 30_000;
-	const SOON_MS = 2_000;
-	const END_SLACK_MS = 1_500;
-	const END_GRACE_MS = 6_000;
-
-	let checked = $state(0);
-
-	function wait_for(t: Live | null) {
-		if (!t?.length) return t ? PLAYING_MS : IDLE_MS;
-		const left = t.started + t.length + END_SLACK_MS - Date.now();
-		if (left > 0) return Math.max(Math.min(left, PLAYING_MS), SOON_MS);
-		return left > -END_GRACE_MS ? SOON_MS : PLAYING_MS;
-	}
-
-	async function check() {
+	every(NOW_EVERY_MS, async () => {
 		const res = await fetch('/api/now').catch(() => null);
 		if (res?.ok) track = await res.json();
-		checked++;
-	}
-
-	$effect(() => {
-		void checked;
-		let due = false;
-		const timer = setTimeout(() => (document.hidden ? (due = true) : check()), wait_for(track));
-		const back = () => !document.hidden && due && check();
-		document.addEventListener('visibilitychange', back);
-		return () => {
-			clearTimeout(timer);
-			document.removeEventListener('visibilitychange', back);
-		};
 	});
 
 	let anchor = 0;
@@ -129,10 +101,10 @@
 		grid-area: 1 / 1;
 		display: flex;
 		align-items: center;
-		gap: 24px;
-		width: calc(100% + 28px);
-		margin: 0 -14px;
-		padding: 14px;
+		gap: var(--gap-2xl);
+		width: calc(100% + 2 * var(--inset));
+		margin: 0 calc(-1 * var(--inset));
+		padding: var(--inset);
 		border-radius: var(--r-lg);
 		--press-scale: 0.985;
 	}
@@ -149,14 +121,14 @@
 	.text {
 		flex: 1;
 		display: grid;
-		gap: 4px;
+		gap: var(--gap-xs);
 		min-width: 0;
 	}
 	.label {
 		display: inline-flex;
 		align-items: center;
-		gap: 8px;
-		margin-bottom: 2px;
+		gap: var(--gap-sm);
+		margin-bottom: var(--gap-2xs);
 		font-size: var(--fs-sm);
 		font-weight: var(--fw-strong);
 		color: var(--accent);
@@ -173,8 +145,8 @@
 	.seek {
 		display: flex;
 		align-items: center;
-		gap: 14px;
-		margin-top: 10px;
+		gap: var(--gap-md);
+		margin-top: var(--gap-md);
 	}
 	.time {
 		min-width: 2.6em;
@@ -199,7 +171,7 @@
 	}
 	@media (max-width: 520px) {
 		.now {
-			gap: 18px;
+			gap: var(--gap-lg);
 		}
 		.now :global(.art) {
 			width: 88px;

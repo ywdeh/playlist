@@ -72,7 +72,7 @@ function paint(colour: string | null) {
 
 export function tint_root() {
 	$effect(() => {
-		fade_ms = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--t-tint')) * 1000 || 0;
+		fade_ms = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--t-out')) * 1000 || 0;
 	});
 	$effect(() => {
 		const { hover, song, playing, live, page } = sources;

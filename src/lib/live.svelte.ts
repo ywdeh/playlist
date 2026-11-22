@@ -1,5 +1,6 @@
 import { createSubscriber } from 'svelte/reactivity';
 
+export const NOW_EVERY_MS = 5_000;
 export const STATS_EVERY_MS = 2 * 60_000;
 
 const subscribe = createSubscriber((update) => {

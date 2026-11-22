@@ -13,7 +13,7 @@
 	.notice {
 		display: grid;
 		justify-items: start;
-		gap: 14px;
+		gap: var(--gap-md);
 		padding-top: 12vh;
 	}
 	p {
@@ -21,7 +21,7 @@
 		font-size: var(--fs-lg);
 	}
 	.home {
-		margin-top: 8px;
+		margin-top: var(--gap-sm);
 		background: var(--accent);
 		color: var(--accent-ink);
 	}

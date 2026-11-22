@@ -34,7 +34,7 @@
 	--mist: rgb(155 184 207);
 	--mist-target: rgb(155 184 207);
 	--mist-ink: #111214;
-	transition: --mist var(--t-tint) var(--ease-tint);
+	transition: --mist var(--t-out) var(--ease);
 
 	--tone-full: 1;
 	--tone-line: 0.55;
@@ -51,13 +51,29 @@
 	--tint: color-mix(in srgb, var(--mist) calc(var(--tone-tint) * 100%), transparent);
 
 	--bar: 3px;
-	--rule: 2px;
+	--stroke: 2px;
 	--shadow: color-mix(in srgb, var(--bg) 85%, transparent);
+
+	--gap-2xs: 2px;
+	--gap-xs: 4px;
+	--gap-sm: 8px;
+	--gap-md: 12px;
+	--gap-lg: 16px;
+	--gap-xl: 20px;
+	--gap-2xl: 24px;
+	--gap-3xl: 32px;
+	--gap-4xl: 48px;
+	--gap-5xl: 64px;
+	--inset: var(--gap-md);
 	--gutter: clamp(20px, 5vw, 48px);
 	--section-gap: clamp(104px, 12vw, 144px);
 
-	--r-xs: 8px;
-	--r-sm: 12px;
+	--icon: 24px;
+	--control-sm: 40px;
+	--control-md: 44px;
+	--control-lg: 48px;
+
+	--r-sm: 10px;
 	--r-md: 16px;
 	--r-lg: 20px;
 	--r-pill: 999px;
@@ -76,14 +92,10 @@
 	--ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 	--ease-ui: cubic-bezier(0.3, 0.3, 0, 1);
 	--ease-in: cubic-bezier(0.5, 0, 0.75, 0);
-	--ease-tint: cubic-bezier(0.25, 0.6, 0.3, 1);
 	--t-in: 0.2s;
 	--t-out: 0.34s;
-	--t-move: 0.5s;
-	--t-enter: 0.6s;
+	--t-move: 0.55s;
 	--t-reveal: 0.8s;
-	--t-tint: 0.4s;
-	--t-tick: 0.25s;
 
 	color-scheme: dark;
 	user-select: none;
@@ -160,8 +172,8 @@ h2 {
 	display: inline-grid;
 	place-items: center;
 	flex: none;
-	height: 48px;
-	padding: 0 24px;
+	height: var(--control-lg);
+	padding: 0 var(--gap-2xl);
 	border-radius: var(--r-pill);
 	--press-scale: 0.94;
 	background: var(--surface);
@@ -234,7 +246,7 @@ html.tinting .press {
 	transition-property: scale, opacity;
 }
 .cascade {
-	animation: cascade_in var(--t-enter) var(--ease) backwards;
+	animation: cascade_in var(--t-move) var(--ease) backwards;
 	animation-delay: calc(min(var(--i, 0), 16) * 40ms);
 }
 .cascade:has(.tip_anchor:hover, .tip_anchor:focus-within, .tip_anchor.tip_show) {
@@ -262,10 +274,10 @@ html:not(.ready) .cascade {
 }
 .tip {
 	position: absolute;
-	bottom: calc(100% + 10px);
+	bottom: calc(100% + var(--gap-sm));
 	left: 50%;
 	z-index: 99;
-	padding: 7px 12px;
+	padding: var(--gap-sm) var(--gap-md);
 	border-radius: var(--r-sm);
 	background: var(--surface);
 	box-shadow: 0 10px 30px var(--shadow);
@@ -288,10 +300,10 @@ html:not(.ready) .cascade {
 }
 .tip.wide {
 	display: grid;
-	gap: 12px;
+	gap: var(--gap-md);
 	width: max-content;
 	max-width: min(320px, calc(100vw - 2 * var(--gutter)));
-	padding: 18px 20px;
+	padding: var(--gap-lg) var(--gap-xl);
 	border-radius: var(--r-md);
 	line-height: 1.5;
 	white-space: normal;
@@ -304,7 +316,7 @@ html:not(.ready) .cascade {
 .tip.below,
 .tip.flip {
 	bottom: auto;
-	top: calc(100% + 10px);
+	top: calc(100% + var(--gap-sm));
 }
 .tip_anchor:focus-visible > .tip,
 .tip_anchor.tip_show > .tip {

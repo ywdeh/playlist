@@ -1,6 +1,10 @@
 import type { Playlist } from '#lib/music';
-import { edge_cached, with_info } from './previews';
+import { remember, stored } from './cache';
+import { with_info } from './previews';
 import { get_playlist } from './spotify';
+
+const REFRESH_S = 7200;
+const EMBED_S = 15 * 60;
 
 const biggest = (images: { url: string; maxWidth?: number }[] = []) =>
 	[...images].sort((a, b) => (b.maxWidth ?? 0) - (a.maxWidth ?? 0))[0]?.url ?? null;
@@ -37,19 +41,15 @@ async function read_embed(id: string): Promise<Playlist> {
 }
 
 async function from_embed(id: string): Promise<Playlist> {
-	const playlist = await edge_cached(`playlist:${id}`, 15 * 60, () => read_embed(id));
+	const playlist = await remember(`embed:${id}`, EMBED_S, () => read_embed(id));
 	const [songs] = await with_info([playlist.songs]);
 	return { ...playlist, songs: songs.map((s, i) => ({ ...s, duration: playlist.songs[i].duration ?? s.duration })) };
 }
 
-export async function load_playlist(id: string): Promise<Playlist | null> {
-	try {
-		const playlist = await get_playlist(id);
-		if (playlist.songs.length) return playlist;
-	} catch {}
-	try {
-		return await from_embed(id);
-	} catch {
-		return null;
-	}
+async function fetch_playlist(id: string): Promise<Playlist> {
+	const playlist = await get_playlist(id).catch(() => null);
+	return playlist?.songs.length ? playlist : from_embed(id);
 }
+
+export const load_playlist = (id: string): Promise<Playlist | null> =>
+	stored(`playlist:${id}`, REFRESH_S, () => fetch_playlist(id)).catch(() => null);

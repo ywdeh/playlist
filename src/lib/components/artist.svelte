@@ -88,9 +88,9 @@
 	.back {
 		display: grid;
 		place-items: center;
-		width: 46px;
-		height: 46px;
-		border-radius: 50%;
+		width: var(--control-lg);
+		height: var(--control-lg);
+		border-radius: var(--r-pill);
 		--press-scale: 0.9;
 		background: var(--surface);
 		color: var(--text);
@@ -99,25 +99,25 @@
 		box-shadow: inset 0 0 0 999px var(--wash);
 	}
 	.back svg {
-		width: 24px;
-		height: 24px;
+		width: var(--icon);
+		height: var(--icon);
 		fill: none;
 		stroke: currentColor;
-		stroke-width: 2px;
+		stroke-width: var(--stroke);
 		stroke-linecap: round;
 		stroke-linejoin: round;
 	}
 	header {
 		display: grid;
 		justify-items: center;
-		gap: 22px;
-		margin: 24px 0 8px;
+		gap: var(--gap-2xl);
+		margin: var(--gap-2xl) 0 var(--gap-sm);
 		text-align: center;
 	}
 	.identity {
 		display: grid;
 		justify-items: center;
-		gap: 22px;
+		gap: var(--gap-2xl);
 	}
 	.photo {
 		width: clamp(180px, 40vw, 260px);
@@ -133,33 +133,33 @@
 		place-items: center;
 		width: 64px;
 		height: 64px;
-		border-radius: 50%;
+		border-radius: var(--r-pill);
 		--press-scale: 0.9;
 		background: var(--accent);
 		color: var(--accent-ink);
 	}
 	.play svg {
-		width: 24px;
-		height: 24px;
+		width: var(--icon);
+		height: var(--icon);
 		fill: currentColor;
 		stroke: currentColor;
-		stroke-width: 2px;
+		stroke-width: var(--stroke);
 		stroke-linejoin: round;
 	}
 	section {
-		margin-top: 64px;
+		margin-top: var(--gap-5xl);
 	}
 	section ~ section {
 		margin-top: var(--section-gap);
 	}
 	h2 {
-		margin: 0 0 26px;
+		margin: 0 0 var(--gap-2xl);
 	}
 	.list {
 		list-style: none;
 		display: grid;
-		gap: 8px;
-		margin: 0 -14px;
+		gap: var(--gap-sm);
+		margin: 0 calc(-1 * var(--inset));
 		padding: 0;
 	}
 </style>

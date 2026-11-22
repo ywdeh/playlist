@@ -33,12 +33,12 @@
 		margin-top: var(--section-gap);
 	}
 	h2 {
-		margin: 0 0 12px;
+		margin: 0 0 var(--gap-md);
 	}
 	.ways {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 6px 16px;
+		gap: var(--gap-sm) var(--gap-lg);
 	}
 	.way {
 		color: var(--muted);

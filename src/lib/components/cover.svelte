@@ -50,13 +50,13 @@
 		position: relative;
 		flex: none;
 		overflow: hidden;
-		--art-r: var(--r-xs);
+		--art-r: var(--r-sm);
 		border-radius: var(--art-r);
 		background: var(--surface-2);
 		aspect-ratio: 1;
 	}
 	.round {
-		--art-r: 50%;
+		--art-r: var(--r-pill);
 	}
 	img {
 		width: 100%;

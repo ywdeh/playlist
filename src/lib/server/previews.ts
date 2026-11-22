@@ -1,16 +1,6 @@
 import { best, norm } from '#lib/match';
 import type { Preview, QueueItem } from '#lib/player_types';
-
-const memory = new Map<string, { expires: number; value: unknown }>();
-
-async function cached<T>(key: string, ttl_seconds: number, load: () => Promise<T>): Promise<T> {
-	const hit = memory.get(key);
-	if (hit && hit.expires > Date.now()) return hit.value as T;
-	const value = await load();
-	memory.set(key, { expires: Date.now() + ttl_seconds * 1000, value });
-	if (memory.size > 2000) memory.delete(memory.keys().next().value!);
-	return value;
-}
+import { remember } from './cache';
 
 let deezer_next = 0;
 async function deezer_slot() {
@@ -86,7 +76,7 @@ async function deezer_exact(name: string, artist: string): Promise<Preview | nul
 
 export function find_preview(name: string, artist: string, isrc?: string): Promise<Preview | null> {
 	const key = `song:${norm(artist)}:${norm(name)}`;
-	return cached(key, 600, async () => {
+	return remember(key, 600, async () => {
 		const attempts = [
 			...(isrc ? [() => deezer_isrc(isrc)] : []),
 			() => deezer_song(name, artist),
@@ -112,24 +102,8 @@ export interface SongInfo {
 	duration: number | null;
 }
 
-export async function edge_cached<T>(key: string, ttl_seconds: number, load: () => Promise<T>): Promise<T> {
-	return cached(key, ttl_seconds, async () => {
-		const edge = (globalThis as { caches?: { default?: Cache } }).caches?.default;
-		const url = `https://songs.cache/${encodeURIComponent(key)}`;
-		const hit = edge ? await edge.match(url).catch(() => undefined) : undefined;
-		if (hit) return (await hit.json()) as T;
-		const value = await load();
-		if (edge) {
-			await edge
-				.put(url, new Response(JSON.stringify(value), { headers: { 'Cache-Control': `max-age=${ttl_seconds}` } }))
-				.catch(() => {});
-		}
-		return value;
-	});
-}
-
 export function find_info(name: string, artist: string): Promise<SongInfo> {
-	return  edge_cached(`info2:${norm(artist)}:${norm(name)}`, 7 * 86400, async () => {
+	return remember(`info2:${norm(artist)}:${norm(name)}`, 7 * 86400, async () => {
 		let failed = 0;
 		try {
 			const json = await get_json(`https://api.deezer.com/search?q=${encodeURIComponent(`${artist} ${name}`)}&limit=10`);
@@ -200,13 +174,13 @@ async function deezer_artist(name: string, songs: string[] = []): Promise<any | 
 
 export function find_art(type: 'track' | 'artist', artist: string, name = '', songs: string[] = []): Promise<string | null> {
 	if (type === 'artist') {
-		return edge_cached(`art3:artist:${norm(artist)}`, 7 * 86400, async () => {
+		return remember(`art3:artist:${norm(artist)}`, 7 * 86400, async () => {
 			const hit = await deezer_artist(artist, songs);
 			const pic: string | undefined = hit?.picture_xl ?? hit?.picture_big;
 			return pic && !pic.includes('/artist//') ? pic : null;
 		});
 	}
-	return edge_cached(`art4:${type}:${norm(artist)}:${norm(name)}`, 7 * 86400, async () => {
+	return remember(`art4:${type}:${norm(artist)}:${norm(name)}`, 7 * 86400, async () => {
 		let failed = false;
 		try {
 			const json = await get_json(`https://api.deezer.com/search?q=${encodeURIComponent(`${artist} ${name}`)}&limit=10`);
@@ -227,7 +201,7 @@ export function find_art(type: 'track' | 'artist', artist: string, name = '', so
 }
 
 export function artist_songs(artist: string, songs: string[] = []): Promise<(QueueItem & SongInfo)[]> {
-	return cached(`artist2:${norm(artist)}`, 6 * 3600, async () => {
+	return remember(`artist2:${norm(artist)}`, 6 * 3600, async () => {
 		const match = await deezer_artist(artist, songs);
 		if (!match) return [];
 		const top = await get_json(`https://api.deezer.com/artist/${match.id}/top?limit=25`);
