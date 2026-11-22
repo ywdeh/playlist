@@ -5,7 +5,7 @@
 
 <div class="notice">
 	<h1>{page.status === 404 ? 'not found' : 'oops'}</h1>
-	<p>{page.error?.message.toLowerCase()}</p>
+	<p>{page.error?.message}</p>
 	<div class="home pill press" role="link" tabindex="0" {@attach link(() => '/')}>go home</div>
 </div>
 

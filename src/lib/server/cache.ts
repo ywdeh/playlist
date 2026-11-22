@@ -54,8 +54,11 @@ export function shared_put(key: string, value: string, ttl_s: number) {
 	waitUntil(store.put(`shared:${key}`, value, { expirationTtl: Math.max(KV_MIN_TTL_S, Math.ceil(ttl_s)) }).catch(() => {}));
 }
 
+export class Loading extends Error {}
+
 const kept = new Map<string, Kept<unknown> & { read: number }>();
 const tried = new Map<string, number>();
+const failed = new Map<string, { at: number; error: unknown }>();
 
 async function read_kept<T>(key: string): Promise<Kept<T> | null> {
 	const hit = kept.get(key);
@@ -67,29 +70,39 @@ async function read_kept<T>(key: string): Promise<Kept<T> | null> {
 
 async function refresh<T>(key: string, load: () => Promise<T>): Promise<T> {
 	tried.set(key, Date.now());
-	const value = await load();
-	const entry = { at: Date.now(), value };
-	kept.set(key, { ...entry, read: Date.now() });
-	await kv()?.put(`stored:${key}`, JSON.stringify(entry)).catch(() => {});
-	return value;
+	try {
+		const value = await load();
+		const entry = { at: Date.now(), value };
+		kept.set(key, { ...entry, read: Date.now() });
+		failed.delete(key);
+		await kv()?.put(`stored:${key}`, JSON.stringify(entry)).catch(() => {});
+		return value;
+	} catch (e) {
+		failed.set(key, { at: Date.now(), error: e });
+		throw e;
+	} finally {
+		await kv()?.delete(`shared:lock:${key}`).catch(() => {});
+	}
+}
+
+async function locked(key: string) {
+	if (await shared_get(`lock:${key}`)) return true;
+	shared_put(`lock:${key}`, '1', LOCK_S);
+	return false;
 }
 
 async function claim(key: string) {
 	if (Date.now() - (tried.get(key) ?? 0) < RETRY_MS) return false;
 	tried.set(key, Date.now());
-	if (await shared_get(`lock:${key}`)) return false;
-	shared_put(`lock:${key}`, '1', LOCK_S);
-	return true;
-}
-
-export async function last<T>(key: string): Promise<T | null> {
-	return (await read_kept<T>(key))?.value ?? null;
+	return !(await locked(key));
 }
 
 export async function stored<T>(key: string, max_age_s: number, load: () => Promise<T>): Promise<T> {
 	const entry = await read_kept<T>(key);
 	if (!entry) {
-		if (!(await claim(key))) throw new Error(`${key} is still loading`);
+		const last_failure = failed.get(key);
+		if (last_failure && Date.now() - last_failure.at < RETRY_MS) throw last_failure.error;
+		if (await locked(key)) throw new Loading(`${key} is loading`);
 		return refresh(key, load);
 	}
 	if (Date.now() - entry.at > max_age_s * 1000 && (await claim(key))) {

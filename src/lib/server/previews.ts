@@ -102,57 +102,6 @@ export interface SongInfo {
 	duration: number | null;
 }
 
-export function find_info(name: string, artist: string): Promise<SongInfo> {
-	return remember(`info2:${norm(artist)}:${norm(name)}`, 7 * 86400, async () => {
-		let failed = 0;
-		try {
-			const json = await get_json(`https://api.deezer.com/search?q=${encodeURIComponent(`${artist} ${name}`)}&limit=10`);
-			const hit = best(json.data ?? [], { name, artist }, (t: any) => ({ name: t.title, artist: t.artist?.name ?? '' }));
-			if (hit) return { album: hit.album?.title || null, duration: hit.duration || null };
-		} catch {
-			failed++;
-		}
-		try {
-			const q = encodeURIComponent(`${artist} ${name}`);
-			const json = await get_json(`https://itunes.apple.com/search?term=${q}&entity=song&limit=10`);
-			const hit = best(json.results ?? [], { name, artist }, (t: any) => ({ name: t.trackName, artist: t.artistName }));
-			if (hit) return { album: hit.collectionName || null, duration: hit.trackTimeMillis ? Math.round(hit.trackTimeMillis / 1000) : null };
-		} catch {
-			failed++;
-		}
-		if (failed) throw new Error('song details unavailable');
-		return { album: null, duration: null };
-	});
-}
-
-const no_info: SongInfo = { album: null, duration: null };
-
-export async function with_info<L extends { name: string; artist: string; album?: string | null }[][]>(
-	lists: [...L],
-	budget = 2500
-): Promise<{ [K in keyof L]: (L[K][number] & SongInfo)[] }> {
-	const found = new Map<string, SongInfo>();
-	const keys = new Map<string, { name: string; artist: string }>();
-	for (const list of lists) for (const s of list) keys.set(`${norm(s.artist)}:${norm(s.name)}`, s);
-
-	const queue = [...keys];
-	const worker = async () => {
-		for (let job = queue.shift(); job; job = queue.shift()) {
-			const [key, s] = job;
-			found.set(key, await find_info(s.name, s.artist).catch(() => no_info));
-		}
-	};
-	await Promise.race([Promise.all(Array.from({ length: 6 }, worker)), new Promise((r) => setTimeout(r, budget))]);
-	queue.length = 0;
-
-	return lists.map((list) =>
-		list.map((s) => {
-			const info = found.get(`${norm(s.artist)}:${norm(s.name)}`) ?? no_info;
-			return { ...s, album: s.album || info.album, duration: info.duration };
-		})
-	) as { [K in keyof L]: (L[K][number] & SongInfo)[] };
-}
-
 async function deezer_namesakes(name: string): Promise<any[]> {
 	const json = await get_json(`https://api.deezer.com/search/artist?q=${encodeURIComponent(name)}&limit=25`);
 	return ((json.data ?? []) as any[])
@@ -170,34 +119,6 @@ async function deezer_artist(name: string, songs: string[] = []): Promise<any | 
 		} catch {}
 	}
 	return (await deezer_namesakes(name))[0] ?? null;
-}
-
-export function find_art(type: 'track' | 'artist', artist: string, name = '', songs: string[] = []): Promise<string | null> {
-	if (type === 'artist') {
-		return remember(`art3:artist:${norm(artist)}`, 7 * 86400, async () => {
-			const hit = await deezer_artist(artist, songs);
-			const pic: string | undefined = hit?.picture_xl ?? hit?.picture_big;
-			return pic && !pic.includes('/artist//') ? pic : null;
-		});
-	}
-	return remember(`art4:${type}:${norm(artist)}:${norm(name)}`, 7 * 86400, async () => {
-		let failed = false;
-		try {
-			const json = await get_json(`https://api.deezer.com/search?q=${encodeURIComponent(`${artist} ${name}`)}&limit=10`);
-			const hit = best(json.data ?? [], { name, artist }, (t: any) => ({ name: t.title, artist: t.artist?.name ?? '' }));
-			if (hit?.album?.cover_big) return hit.album.cover_big as string;
-		} catch {
-			failed = true;
-		}
-		try {
-			const p = await itunes_song(name, artist);
-			if (p?.cover) return p.cover;
-		} catch {
-			failed = true;
-		}
-		if (failed) throw new Error('cover lookup failed');
-		return null;
-	});
 }
 
 export function artist_songs(artist: string, songs: string[] = []): Promise<(QueueItem & SongInfo)[]> {

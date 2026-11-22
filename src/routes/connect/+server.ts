@@ -5,8 +5,8 @@ import { OWNER_SCOPES } from '#lib/server/spotify';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = ({ url, cookies }) => {
-	if (!dev) error(404, 'Not found');
-	if (!SPOTIFY_CLIENT_ID) error(500, 'SPOTIFY_CLIENT_ID is not set');
+	if (!dev) error(404, 'this page doesn’t exist');
+	if (!SPOTIFY_CLIENT_ID) error(500, 'spotify isn’t set up on the server yet');
 	const state = crypto.randomUUID();
 	cookies.set('connect_state', state, { path: '/connect', httpOnly: true, sameSite: 'lax', maxAge: 600 });
 	const params = new URLSearchParams({

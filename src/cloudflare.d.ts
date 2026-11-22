@@ -3,6 +3,7 @@ declare module 'cloudflare:workers' {
 		get(key: string, type: 'json'): Promise<unknown>;
 		get(key: string): Promise<string | null>;
 		put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
+		delete(key: string): Promise<void>;
 	}
 	export const env: { SNAPSHOTS?: Store };
 	export function waitUntil(promise: Promise<unknown>): void;

@@ -2,8 +2,9 @@ import { error, isHttpError } from '@sveltejs/kit';
 import { SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REFRESH_TOKEN } from '$app/env/private';
 import { PERIODS, type Artist, type ArtistData, type Live, type LiveData, type Period, type Playlist, type Song, type Top } from '#lib/music';
 import { norm, same_artist, song_key } from '#lib/match';
+import { FAVOURITE_PLAYLIST } from '#lib/site';
 import { artist_songs } from './previews';
-import { last, remember, shared_get, shared_put, stored } from './cache';
+import { Loading, remember, shared_get, shared_put, stored } from './cache';
 
 const API = 'https://api.spotify.com/v1';
 const ACCOUNTS = 'https://accounts.spotify.com';
@@ -19,16 +20,21 @@ const COOL_READ_MS = 60_000;
 const TOP_SONGS = 25;
 const TOP_ARTISTS = 8;
 const ENJOYED = 12;
-const LEGACY_LIVE = 'live3';
 
 export class SpotifyError extends Error {
 	constructor(
 		public status: number,
-		message: string
+		message: string,
+		public until = 0
 	) {
 		super(message);
 	}
 }
+
+const UNREACHABLE = -1;
+const unreachable = (): never => {
+	throw new SpotifyError(UNREACHABLE, 'unreachable');
+};
 
 const cools = new Map<string, { until: number; read: number }>();
 const endpoint = (path: string) => path.split('?')[0].replace(/\/\w{22}$/, '');
@@ -41,7 +47,7 @@ async function cooling(where: string) {
 		cool.until = Math.max(cool.until, Number(await shared_get(`cool:${key}`)) || 0);
 		cools.set(key, cool);
 	}
-	if (Date.now() < cool.until) throw new SpotifyError(429, 'Too many requests');
+	if (Date.now() < cool.until) throw new SpotifyError(429, 'Too many requests', cool.until);
 }
 
 function cool_down(res: Response, where: string) {
@@ -64,10 +70,10 @@ async function grant(body: Record<string, string>) {
 			'Content-Type': 'application/x-www-form-urlencoded'
 		},
 		body: new URLSearchParams(body)
-	});
+	}).catch(unreachable);
 	cool_down(res, 'sign-in');
 	const json = (await res.json().catch(() => null)) as any;
-	if (!res.ok || !json?.access_token) throw new SpotifyError(res.status, json?.error_description ?? 'Spotify sign-in failed');
+	if (!res.ok || !json?.access_token) throw new SpotifyError(res.status, json?.error_description ?? 'Spotify sign-in failed', cools.get('sign-in')?.until);
 	return json as { access_token: string; refresh_token?: string; expires_in: number };
 }
 
@@ -85,7 +91,7 @@ async function access_token(): Promise<string> {
 
 async function request(path: string, retry = true): Promise<any> {
 	await cooling(path);
-	const res = await fetch(`${API}${path}`, { headers: { Authorization: `Bearer ${await access_token()}` } });
+	const res = await fetch(`${API}${path}`, { headers: { Authorization: `Bearer ${await access_token()}` } }).catch(unreachable);
 	if (res.status === 401 && retry) {
 		token = null;
 		return request(path, false);
@@ -93,7 +99,7 @@ async function request(path: string, retry = true): Promise<any> {
 	cool_down(res, path);
 	if (res.status === 204) return null;
 	const json = (await res.json().catch(() => null)) as any;
-	if (!res.ok) throw new SpotifyError(res.status, json?.error?.message ?? `upstream ${res.status}`);
+	if (!res.ok) throw new SpotifyError(res.status, json?.error?.message ?? `upstream ${res.status}`, cools.get(endpoint(path))?.until);
 	return json;
 }
 
@@ -205,13 +211,49 @@ const top_of = (lib: Library, period: Period): Top => ({
 	artists: lib.top[period].artists.slice(0, TOP_ARTISTS).map(to_artist)
 });
 
+interface Pool {
+	tracks: Track[];
+	artists: RawArtist[];
+}
+
+interface RawPlaylist {
+	name: string;
+	images: Image[];
+	url: string;
+	tracks: Track[];
+}
+
+async function read_playlist(id: string): Promise<RawPlaylist> {
+	const p = await request(`/playlists/${encodeURIComponent(id)}`);
+	const raw: any[] = (p?.tracks?.items ?? p?.items?.items ?? []).map((x: any) => x.track ?? x.item);
+	return {
+		name: p?.name ?? 'playlist',
+		images: p?.images ?? [],
+		url: p?.external_urls?.spotify ?? `https://open.spotify.com/playlist/${id}`,
+		tracks: raw.filter((t) => t?.id && t.type === 'track' && !t.is_local).map(slim_track)
+	};
+}
+
+const favourites = () => stored(`playlist3:${FAVOURITE_PLAYLIST}`, SYNC_EVERY_S, () => read_playlist(FAVOURITE_PLAYLIST));
+
+export async function load_playlist(): Promise<Playlist> {
+	const p = await favourites();
+	return { name: p.name, image: image(p.images, 300), url: p.url, songs: songs(p.tracks).filter((s): s is Song & { spotify: string } => !!s.spotify) };
+}
+
+async function pool(): Promise<Pool> {
+	const [lib, playlist] = await Promise.all([library(), favourites().catch(() => null)]);
+	const seen = new Set<string>();
+	const tracks = [...all_tracks(lib), ...(playlist?.tracks ?? [])].filter((t) => !seen.has(t.id) && seen.add(t.id));
+	return { tracks, artists: all_artists(lib) };
+}
 const credited = (t: Track, artist: string) => t.artists.some((a) => norm(a.name) === norm(artist));
 
-function find_artist(lib: Library, name: string): (Artist & { name: string }) | null {
+function find_artist({ tracks, artists }: Pool, name: string): (Artist & { name: string }) | null {
 	const want = norm(name);
-	const top = all_artists(lib).find((a) => norm(a.name) === want);
+	const top = artists.find((a) => norm(a.name) === want);
 	if (top) return to_artist(top);
-	for (const t of all_tracks(lib)) {
+	for (const t of tracks) {
 		const a = t.artists.find((a) => norm(a.name) === want);
 		if (a) return { name: a.name, image: null, spotify: a.external_urls?.spotify };
 	}
@@ -220,21 +262,12 @@ function find_artist(lib: Library, name: string): (Artist & { name: string }) | 
 
 export async function owner_song(name: string, artist: string): Promise<Song | null> {
 	const want = song_key({ name, artist });
-	const hit = all_tracks(await library()).find((t) => song_key({ name: t.name, artist: t.artists[0]?.name ?? '' }) === want);
+	const hit = (await pool()).tracks.find((t) => song_key({ name: t.name, artist: t.artists[0]?.name ?? '' }) === want);
 	return hit ? to_song(hit) : null;
 }
 
 export async function artist_image(name: string): Promise<string | null> {
-	return find_artist(await library(), name)?.image ?? null;
-}
-
-export async function songs_by(artist: string, max = 3): Promise<string[]> {
-	const lib = await library().catch(() => null);
-	if (!lib) return [];
-	return all_tracks(lib)
-		.filter((t) => credited(t, artist))
-		.slice(0, max)
-		.map((t) => t.name);
+	return find_artist(await pool(), name)?.image ?? null;
 }
 
 async function read_now_playing(): Promise<Live | null> {
@@ -247,19 +280,6 @@ async function read_now_playing(): Promise<Live | null> {
 
 export const get_now_playing = () => remember('spotify:now', NOW_TTL_S, read_now_playing);
 
-export async function get_playlist(id: string): Promise<Playlist> {
-	const p = await request(`/playlists/${encodeURIComponent(id)}`);
-	const tracks = songs((p?.tracks?.items ?? p?.items?.items ?? []).map((x: any) => x.track ?? x.item)).filter(
-		(s): s is Song & { spotify: string } => !!s.spotify
-	);
-	return {
-		name: p?.name ?? 'playlist',
-		image: image(p?.images, 300),
-		url: p?.external_urls?.spotify ?? `https://open.spotify.com/playlist/${id}`,
-		songs: tracks
-	};
-}
-
 export async function load_live(): Promise<LiveData> {
 	const now = get_now_playing().catch(() => null);
 	try {
@@ -271,9 +291,7 @@ export async function load_live(): Promise<LiveData> {
 			now: await now
 		};
 	} catch (e) {
-		const old = await last<Omit<LiveData, 'now'>>(LEGACY_LIVE);
-		if (!old) fail(e);
-		return { ...old, now: await now };
+		fail(e);
 	}
 }
 
@@ -286,17 +304,17 @@ export async function load_top(period: Period): Promise<Top> {
 }
 
 export async function load_artist(name: string): Promise<ArtistData> {
-	let lib: Library;
+	let known: Pool;
 	try {
-		lib = await library();
+		known = await pool();
 	} catch (e) {
 		fail(e);
 	}
-	const found = find_artist(lib, name);
+	const found = find_artist(known, name);
 	const artist = found?.name ?? name;
-	const yours = songs(all_tracks(lib).filter((t) => credited(t, artist)));
+	const yours = songs(known.tracks.filter((t) => credited(t, artist)));
+	if (!found) error(404, 'that artist isn’t in my music');
 	const popular = await artist_songs(artist, yours.slice(0, 3).map((s) => s.name)).catch(() => []);
-	if (!found && !yours.length && !popular.length) error(404, "we couldn't find that artist");
 	const mine = new Set(yours.map(song_key));
 	return {
 		artist,
@@ -309,20 +327,37 @@ export async function load_artist(name: string): Promise<ArtistData> {
 	};
 }
 
+function wait_text(until: number) {
+	const minutes = Math.ceil((until - Date.now()) / 60_000);
+	if (minutes <= 1) return 'in a minute';
+	if (minutes < 60) return `in about ${minutes} minutes`;
+	const hours = Math.round(minutes / 60);
+	return `in about ${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+}
+
 export function describe(e: unknown): { status: number; message: string } {
+	if (e instanceof Loading) return { status: 503, message: 'my music is still loading from spotify, try again in a moment' };
 	if (e instanceof SpotifyError) {
-		if (e.status === 0) return { status: 500, message: e.message };
-		if (e.status === 429) return { status: 503, message: 'too many requests right now, try again in a minute' };
-		if (e.status === 403) return { status: 503, message: 'spotify refused access, check the app’s users in the spotify dashboard' };
+		if (e.status === UNREACHABLE) return { status: 502, message: 'couldn’t reach spotify' };
+		if (e.status === 0) return { status: 500, message: 'spotify isn’t set up on the server yet' };
+		if (e.status === 429) return { status: 503, message: `spotify is limiting requests right now, back ${wait_text(e.until)}` };
+		if (e.status === 403) return { status: 503, message: 'spotify refused access to my account' };
 		if (e.status === 400 || e.status === 401) return { status: 503, message: 'spotify needs to be connected again' };
-		return { status: 502, message: 'spotify had a hiccup, try again shortly' };
+		if (e.status === 404) return { status: 502, message: 'spotify couldn’t find that' };
+		if (e.status >= 500) return { status: 502, message: 'spotify is having trouble right now' };
+		return { status: 502, message: `spotify answered with an error (${e.status})` };
 	}
-	return { status: 500, message: 'something went wrong' };
+	return { status: 500, message: `the server hit a problem: ${e instanceof Error ? e.message.toLowerCase() : 'unknown'}` };
+}
+export function report(where: string, e: unknown) {
+	if (e instanceof Loading || (e instanceof SpotifyError && e.status === 429)) return;
+	const detail = e instanceof SpotifyError ? `spotify ${e.status} ${e.message}` : e instanceof Error ? e.message : String(e);
+	console.error(`${where}: ${detail}`);
 }
 
 function fail(e: unknown): never {
 	if (isHttpError(e)) throw e;
-	console.error(e);
+	report('loading page', e);
 	const { status, message } = describe(e);
 	error(status, message);
 }

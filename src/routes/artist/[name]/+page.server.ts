@@ -4,6 +4,6 @@ import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ params }) => {
 	const name = params.name.trim();
-	if (!name || name.length > 200) error(404, "we couldn't find that artist");
+	if (!name || name.length > 200) error(404, 'that artist isn’t in my music');
 	return load_artist(name);
 };
