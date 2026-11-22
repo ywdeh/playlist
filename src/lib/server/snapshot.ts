@@ -16,6 +16,18 @@ function kv() {
 	}
 }
 
+const KV_MIN_TTL_S = 60;
+
+export async function shared_get(key: string): Promise<string | null> {
+	return (await kv()?.get(`shared:${key}`).catch(() => null)) ?? null;
+}
+
+export function shared_put(key: string, value: string, ttl_s: number) {
+	const store = kv();
+	if (!store) return;
+	waitUntil(store.put(`shared:${key}`, value, { expirationTtl: Math.max(KV_MIN_TTL_S, Math.ceil(ttl_s)) }).catch(() => {}));
+}
+
 async function read<T>(key: string): Promise<Stored<T> | null> {
 	const hit = memory.get(key);
 	if (hit && Date.now() - hit.read < REREAD_MS) return hit as Stored<T>;

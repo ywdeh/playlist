@@ -3,7 +3,7 @@ import { SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REFRESH_TOKEN } from 
 import type { Artist, ArtistData, Live, LiveData, Period, Playlist, Song, Top } from '#lib/music';
 import { norm, same_artist, song_key } from '#lib/match';
 import { artist_songs } from './previews';
-import { stored } from './snapshot';
+import { shared_get, shared_put, stored } from './snapshot';
 
 const API = 'https://api.spotify.com/v1';
 const ACCOUNTS = 'https://accounts.spotify.com';
@@ -20,14 +20,25 @@ export class SpotifyError extends Error {
 }
 
 const COOL_MIN_S = 5;
-const COOL_MAX_S = 3600;
+const COOL_MAX_S = 86400;
+const COOL_READ_MS = 60_000;
 let cool_until = 0;
+let cool_read = 0;
+
+async function cooling() {
+	if (Date.now() - cool_read > COOL_READ_MS) {
+		cool_read = Date.now();
+		cool_until = Math.max(cool_until, Number(await shared_get('cool')) || 0);
+	}
+	return Date.now() < cool_until;
+}
 
 function cool_down(res: Response, where: string) {
 	if (res.status !== 429) return;
-	const wait = Number(res.headers.get('retry-after')) || COOL_MIN_S;
+	const wait = Math.min(Math.max(Number(res.headers.get('retry-after')) || COOL_MIN_S, COOL_MIN_S), COOL_MAX_S);
 	console.error(`spotify rate limited on ${where}, retry after ${wait}s`);
-	cool_until = Date.now() + Math.min(Math.max(wait, COOL_MIN_S), COOL_MAX_S) * 1000;
+	cool_until = Math.max(cool_until, Date.now() + wait * 1000);
+	shared_put('cool', String(cool_until), wait);
 }
 
 const basic = () => `Basic ${btoa(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`)}`;
@@ -75,7 +86,7 @@ type Entry = { at: number; value: any };
 const memory = new Map<string, Entry & { expires: number }>();
 
 async function fetch_api(path: string, retry = true): Promise<any> {
-	if (Date.now() < cool_until) throw new SpotifyError(429, 'Too many requests');
+	if (await cooling()) throw new SpotifyError(429, 'Too many requests');
 	const res = await fetch(`${API}${path}`, { headers: { Authorization: `Bearer ${await access_token()}` } });
 	if (res.status === 401 && retry) {
 		token = null;
