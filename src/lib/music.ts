@@ -45,7 +45,17 @@ export interface Top {
 export interface LiveData extends Top {
 	updated: string;
 	now: Live | null;
-	enjoyed: Song[];
+	recent: Song[];
+	listens: Listens | null;
+}
+
+// How many days of listening history the page shows.
+export const LISTEN_DAYS = 7;
+
+export interface Listens {
+	// When the play log starts: days before this are unknown, not zero.
+	from: number;
+	plays: [at: number, seconds: number][];
 }
 
 export interface ArtistData {

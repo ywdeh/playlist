@@ -3,6 +3,13 @@ export function length(seconds: number) {
 	return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
+export function hours(seconds: number) {
+	const m = Math.round(seconds / 60);
+	if (m < 60) return `${m}m`;
+	const h = Math.floor(m / 60);
+	return m % 60 ? `${h}h ${m % 60}m` : `${h}h`;
+}
+
 export function ago(iso: string | null, now = Date.now()) {
 	if (!iso) return 'never';
 	const diff = now - new Date(iso).getTime();

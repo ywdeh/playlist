@@ -1,6 +1,6 @@
 import { error, isHttpError } from '@sveltejs/kit';
 import { SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REFRESH_TOKEN } from '$app/env/private';
-import { DEFAULT_PERIOD, PERIODS, type Artist, type ArtistData, type Live, type LiveData, type Period, type Playlist, type Song, type Top } from '#lib/music';
+import { DEFAULT_PERIOD, PERIODS, type Artist, type ArtistData, type Live, type LiveData, type Period, type Playlist, type Song, type Top, type Listens, LISTEN_DAYS } from '#lib/music';
 import { norm, same_artist, song_key } from '#lib/match';
 import { FAVOURITE_PLAYLIST } from '#lib/site';
 import { artist_songs } from './previews';
@@ -20,9 +20,7 @@ const COOL_MAX_S = 86400;
 const COOL_READ_MS = 60_000;
 const TOP_SONGS = 24;
 const TOP_ARTISTS = 8;
-const ENJOYED = 16;
-const ENJOYED_DAYS = 7;
-const ENJOYED_MIN_PLAYS = 2;
+const RECENT = 16;
 const PLAYS_KEY = 'plays1';
 const PLAYS_KEEP_DAYS = 30;
 const DAY_MS = 86_400_000;
@@ -219,39 +217,30 @@ export async function sync_all() {
 	return { library: new Date(lib.synced).toISOString(), plays: log.plays.length };
 }
 
-type Tally = { track: Track; count: number; last: number };
-
-// Plays per song since `since`, with releases of the same song counted together.
-function tally(log: PlayLog, since: number): Tally[] {
-	const counts = new Map<string, Tally>();
-	for (const [id, at] of log.plays) {
-		const track = log.tracks[id];
-		if (!track || at < since) continue;
-		const key = song_key({ name: track.name, artist: track.artists[0]?.name ?? '' });
-		const seen = counts.get(key);
-		if (!seen) counts.set(key, { track, count: 1, last: at });
-		else {
-			seen.count++;
-			if (at > seen.last) Object.assign(seen, { track, last: at });
-		}
+// The latest plays, newest first, each song once (at its latest play).
+function recently_listened(log: PlayLog): Song[] {
+	const seen = new Set<string>();
+	const out: Song[] = [];
+	for (let i = log.plays.length - 1; i >= 0 && out.length < RECENT; i--) {
+		const [id, at] = log.plays[i];
+		const song = to_song(log.tracks[id]);
+		if (!song || seen.has(song_key(song))) continue;
+		seen.add(song_key(song));
+		out.push({ ...song, played: new Date(at).toISOString() });
 	}
-	return [...counts.values()];
+	return out;
 }
 
-const repeated = (list: Tally[]) =>
-	list.filter((c) => c.count >= ENJOYED_MIN_PLAYS).sort((a, b) => b.count - a.count || b.last - a.last);
-
-// Songs played 2+ times this week; else 2+ times in the whole log (30 days); else, so the
-// section never goes empty, the most recent plays.
-function recently_enjoyed(log: PlayLog): Song[] {
-	const week = tally(log, Date.now() - ENJOYED_DAYS * DAY_MS);
-	let picked = repeated(week);
-	if (!picked.length) picked = repeated(tally(log, 0));
-	if (!picked.length) picked = tally(log, 0).sort((a, b) => b.last - a.last);
-	return picked.slice(0, ENJOYED).flatMap(({ track, count, last }) => {
-		const song = to_song(track);
-		return song ? [{ ...song, played: new Date(last).toISOString(), plays: count }] : [];
-	});
+// Every play from the last LISTEN_DAYS days (plus one, to reach back to the viewer's midnight) as
+// [played at, track length]. The page splits them into days by the viewer's own clock, since the
+// server doesn't know their time zone. Track length is an estimate: Spotify only logs plays past
+// ~30s and doesn't say how much was heard.
+function listens(log: PlayLog): Listens {
+	const since = Date.now() - (LISTEN_DAYS + 1) * DAY_MS;
+	return {
+		from: log.plays[0]?.[1] ?? Date.now(),
+		plays: log.plays.filter(([, at]) => at >= since).map(([id, at]) => [at, Math.round((log.tracks[id]?.duration_ms ?? 0) / 1000)])
+	};
 }
 
 const top_of = (lib: Library, period: Period): Top => ({
@@ -340,7 +329,8 @@ export async function load_live(): Promise<LiveData> {
 		const plays = await log;
 		return {
 			...top_of(lib, DEFAULT_PERIOD),
-			enjoyed: plays ? recently_enjoyed(plays) : [],
+			recent: plays ? recently_listened(plays) : [],
+			listens: plays?.plays.length ? listens(plays) : null,
 			updated: new Date(lib.synced).toISOString(),
 			now: await now
 		};

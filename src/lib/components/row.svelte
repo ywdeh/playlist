@@ -42,11 +42,11 @@
 		{@attach song_menu(() => ({ name, artist, play: onplay, spotify: song.spotify, artist_spotify: song.artist_spotify }))}
 	>
 		{#if pinned}
-			<span class="rank heart tip_anchor" aria-label="One of my favourites">
+			<span class="rank heart tip_anchor" aria-label="An all time favourite">
 				<svg viewBox="0 0 24 24" aria-hidden="true"
 					><path d="M12 20.3 10.9 19.3C6 14.9 2.9 12.1 2.9 8.6 2.9 5.9 5 3.8 7.7 3.8c1.6 0 3.2.8 4.3 2 1.1-1.2 2.7-2 4.3-2 2.7 0 4.8 2.1 4.8 4.8 0 3.5-3.1 6.3-8 10.7z" /></svg
 				>
-				<span class="tip" role="tooltip">one of my favourites</span>
+				<span class="tip" role="tooltip">all time favourite</span>
 			</span>
 		{:else if rank !== undefined}
 			<span class="rank">{rank}</span>

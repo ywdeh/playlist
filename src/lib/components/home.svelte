@@ -4,7 +4,7 @@
 	import MoreList from './more_list.svelte';
 	import Shelf from './shelf.svelte';
 	import NowPlaying from './now_playing.svelte';
-	import { PERIODS, PERIOD_LABELS, type LiveData, type Period, type Playlist, type Top } from '#lib/music';
+	import { LISTEN_DAYS, PERIODS, PERIOD_LABELS, type LiveData, type Period, type Playlist, type Top } from '#lib/music';
 	import { player } from '#lib/player.svelte';
 	import { cover_url, page_tint, tint_on_hover } from '#lib/tint.svelte';
 	import { link, out_link } from '#lib/link';
@@ -12,7 +12,7 @@
 	import { artist_menu, artist_path, song_menu } from '#lib/menu.svelte';
 	import { reveal } from '#lib/reveal';
 	import { flip } from '#lib/flip.svelte';
-	import { ago } from '#lib/format';
+	import { ago, hours } from '#lib/format';
 	import { invalidateAll } from '$app/navigation';
 	import { clock, every, STATS_EVERY_MS } from '#lib/live.svelte';
 
@@ -37,6 +37,28 @@
 	const best = $derived(top.tracks[0]);
 	const backdrop = $derived(best ? cover_url(best.image, best.artist, best.name) : null);
 	page_tint(() => backdrop);
+
+	// Listening time per day by the viewer's clock, today first, skipping days before the log began.
+	const days = $derived.by(() => {
+		const listens = data.listens;
+		if (!listens) return [];
+		const out: { label: string; seconds: number }[] = [];
+		const day = new Date(clock.now);
+		day.setHours(0, 0, 0, 0);
+		let end = Infinity;
+		for (let i = 0; i < LISTEN_DAYS; i++) {
+			const start = day.getTime();
+			if (end <= listens.from) break;
+			const seconds = listens.plays.reduce((sum, [at, s]) => (at >= start && at < end ? sum + s : sum), 0);
+			const label = i === 0 ? 'today' : i === 1 ? 'yesterday' : day.toLocaleDateString(undefined, { weekday: 'long' }).toLowerCase();
+			out.push({ label, seconds });
+			end = start;
+			day.setDate(day.getDate() - 1);
+		}
+		return out;
+	});
+	const today = $derived(days[0]?.seconds ?? 0);
+	const busiest = $derived(Math.max(1, ...days.map((d) => d.seconds)));
 
 	const shown = $derived(pending ?? top.period);
 	const loaded = new Map<Period, Top>();
@@ -147,13 +169,30 @@
 	{/if}
 {/key}
 
-{#if data.enjoyed.length}
+{#if data.recent.length}
 	<section class="block cascade" style:--i={16 + shift} {@attach reveal}>
-		<h2>recently enjoyed</h2>
-		<MoreList total={data.enjoyed.length} order={27 + shift}>
-			<ul class="list" {@attach flip(() => data.enjoyed)}>
-				{#each data.enjoyed as s, i (s.artist + s.name)}
-					<Row song={s} order={17 + shift + Math.min(i, 9)} onplay={() => player.play(data.enjoyed, i)} />
+		<div class="heading">
+			<h2>recently listened</h2>
+			{#if days.length}
+				<button type="button" class="listened tip_anchor" aria-describedby="listen_history">
+					{hours(today)} listened today
+					<span class="tip end wide history" role="tooltip" id="listen_history">
+						<strong>listening time</strong>
+						<span class="days">
+							{#each days as d (d.label)}
+								<span class="day">{d.label}</span>
+								<span class="bar" aria-hidden="true"><span style:width="{(d.seconds / busiest) * 100}%"></span></span>
+								<span class="time">{d.seconds ? hours(d.seconds) : '–'}</span>
+							{/each}
+						</span>
+					</span>
+				</button>
+			{/if}
+		</div>
+		<MoreList total={data.recent.length} order={27 + shift}>
+			<ul class="list" {@attach flip(() => data.recent)}>
+				{#each data.recent as s, i (s.artist + s.name)}
+					<Row song={s} order={17 + shift + Math.min(i, 9)} onplay={() => player.play(data.recent, i)} />
 				{/each}
 			</ul>
 		</MoreList>
@@ -231,6 +270,46 @@
 	}
 	h2 {
 		margin: 0 0 var(--gap-xl);
+	}
+	.heading {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		justify-content: space-between;
+		column-gap: var(--gap-lg);
+	}
+	.listened {
+		margin: 0 0 var(--gap-xl);
+		color: var(--muted);
+		font-size: var(--fs-md);
+		cursor: default;
+	}
+	.history strong {
+		font-weight: var(--fw-strong);
+		font-size: var(--fs-sm);
+	}
+	.days {
+		display: grid;
+		grid-template-columns: auto 96px auto;
+		align-items: center;
+		gap: var(--gap-xs) var(--gap-md);
+		font-variant-numeric: tabular-nums;
+	}
+	.days .time {
+		text-align: right;
+		color: var(--text);
+	}
+	.bar {
+		height: 4px;
+		border-radius: var(--r-pill);
+		background: var(--wash);
+		overflow: hidden;
+	}
+	.bar > span {
+		display: block;
+		height: 100%;
+		border-radius: inherit;
+		background: var(--muted);
 	}
 	.block {
 		margin-top: var(--section-gap);
