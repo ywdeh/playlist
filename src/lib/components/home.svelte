@@ -76,7 +76,7 @@
 <div class="title cascade" style:--i={0}>
 	<h1>
 		<span class="site press" aria-label="{title}, open {CONTACT.site.label}" {@attach out_link(CONTACT.site.href)}
-			>{title}<span class="tld_clip" aria-hidden="true"><span class="tld">.art</span></span></span
+			>{title}</span
 		>
 	</h1>
 	<button type="button" class="updated tip_anchor" aria-label="About this page" aria-describedby="about_page">
@@ -189,38 +189,6 @@
 	.site {
 		cursor: pointer;
 		--press-scale: 0.98;
-	}
-	/* .art slides out from behind the name: the clip box starts at the name's edge, so it's masked until it emerges */
-	.tld_clip {
-		display: inline-block;
-		overflow: clip;
-		overflow-clip-margin: 0.15em;
-		vertical-align: bottom;
-		padding-bottom: 0.1em;
-		margin-bottom: -0.1em;
-	}
-	.tld {
-		display: inline-block;
-		color: var(--muted);
-		opacity: 0;
-		filter: blur(6px);
-		translate: -100% 0;
-		transition:
-			opacity var(--t-move) var(--ease),
-			filter var(--t-move) var(--ease),
-			translate var(--t-move) var(--ease);
-	}
-	.site:focus-visible .tld {
-		opacity: var(--tone-off);
-		filter: blur(0);
-		translate: 0 0;
-	}
-	@media (hover: hover) {
-		.site:hover .tld {
-			opacity: var(--tone-off);
-			filter: blur(0);
-			translate: 0 0;
-		}
 	}
 	.intro {
 		max-width: 34em;
