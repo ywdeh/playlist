@@ -1,9 +1,0 @@
-{
-	"permissions": {
-		"allow": [
-			"PowerShell(npm run deploy*)",
-			"PowerShell(git push*)",
-			"PowerShell(& *GitHubDesktop*git.exe push*)"
-		]
-	}
-}
