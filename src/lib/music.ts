@@ -1,7 +1,7 @@
 export const PERIODS = ['short_term', 'medium_term', 'long_term'] as const;
 export type Period = (typeof PERIODS)[number];
 
-export const DEFAULT_PERIOD: Period = 'medium_term';
+export const DEFAULT_PERIOD: Period = 'short_term';
 
 export const PERIOD_LABELS: Record<Period, string> = {
 	short_term: 'month',
