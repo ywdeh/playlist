@@ -355,10 +355,14 @@ export async function load_artist(name: string): Promise<ArtistData> {
 		fail(e);
 	}
 	const found = find_artist(known, name);
-	const artist = found?.name ?? name;
-	const yours = songs(known.tracks.filter((t) => credited(t, artist)));
 	if (!found) error(404, 'that artist isn’t in my music');
-	const popular = await artist_songs(artist, yours.slice(0, 3).map((s) => s.name)).catch(() => []);
+	const artist = found.name;
+	// Only songs from the favourite playlist count as "mine"; other listening is left to the popular list.
+	const playlist = await favourites().catch(() => null);
+	const yours = songs((playlist?.tracks ?? []).filter((t) => credited(t, artist)));
+	// Any song I've played helps Deezer find the right artist, playlist or not.
+	const seeds = known.tracks.filter((t) => credited(t, artist)).slice(0, 3).map((t) => t.name);
+	const popular = await artist_songs(artist, seeds).catch(() => []);
 	const mine = new Set(yours.map(song_key));
 	return {
 		artist,
