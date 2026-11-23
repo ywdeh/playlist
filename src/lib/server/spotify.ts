@@ -11,7 +11,8 @@ const ACCOUNTS = 'https://accounts.spotify.com';
 
 export const OWNER_SCOPES = 'user-top-read user-read-recently-played user-read-currently-playing user-library-read';
 
-const SYNC_EVERY_S = 7200;
+// Just under the cron's 30-minute interval, so every cron run finds the data stale and refreshes it.
+const SYNC_EVERY_S = 1500;
 const NOW_TTL_S = 4;
 const TOKEN_MARGIN_MS = 30_000;
 const COOL_MIN_S = 5;
@@ -23,7 +24,6 @@ const ENJOYED = 16;
 const ENJOYED_DAYS = 7;
 const ENJOYED_MIN_PLAYS = 2;
 const PLAYS_KEY = 'plays1';
-const PLAYS_EVERY_S = 1500;
 const PLAYS_KEEP_DAYS = 30;
 const DAY_MS = 86_400_000;
 
@@ -211,7 +211,13 @@ async function log_plays(): Promise<PlayLog> {
 	return { plays: kept, tracks: Object.fromEntries(Object.entries(tracks).filter(([id]) => used.has(id))) };
 }
 
-export const play_log = () => stored(PLAYS_KEY, PLAYS_EVERY_S, log_plays);
+export const play_log = () => stored(PLAYS_KEY, SYNC_EVERY_S, log_plays);
+
+// Called by the cron every 30 minutes: starts a refresh of anything older than SYNC_EVERY_S.
+export async function sync_all() {
+	const [lib, log] = await Promise.all([library(), play_log(), favourites().catch(() => null)]);
+	return { library: new Date(lib.synced).toISOString(), plays: log.plays.length };
+}
 
 function recently_enjoyed(log: PlayLog): Song[] {
 	const since = Date.now() - ENJOYED_DAYS * DAY_MS;
