@@ -219,9 +219,11 @@ export async function sync_all() {
 	return { library: new Date(lib.synced).toISOString(), plays: log.plays.length };
 }
 
-function recently_enjoyed(log: PlayLog): Song[] {
-	const since = Date.now() - ENJOYED_DAYS * DAY_MS;
-	const counts = new Map<string, { track: Track; count: number; last: number }>();
+type Tally = { track: Track; count: number; last: number };
+
+// Plays per song since `since`, with releases of the same song counted together.
+function tally(log: PlayLog, since: number): Tally[] {
+	const counts = new Map<string, Tally>();
 	for (const [id, at] of log.plays) {
 		const track = log.tracks[id];
 		if (!track || at < since) continue;
@@ -233,14 +235,23 @@ function recently_enjoyed(log: PlayLog): Song[] {
 			if (at > seen.last) Object.assign(seen, { track, last: at });
 		}
 	}
-	return [...counts.values()]
-		.filter((c) => c.count >= ENJOYED_MIN_PLAYS)
-		.sort((a, b) => b.count - a.count || b.last - a.last)
-		.slice(0, ENJOYED)
-		.flatMap(({ track, count, last }) => {
-			const song = to_song(track);
-			return song ? [{ ...song, played: new Date(last).toISOString(), plays: count }] : [];
-		});
+	return [...counts.values()];
+}
+
+const repeated = (list: Tally[]) =>
+	list.filter((c) => c.count >= ENJOYED_MIN_PLAYS).sort((a, b) => b.count - a.count || b.last - a.last);
+
+// Songs played 2+ times this week; else 2+ times in the whole log (30 days); else, so the
+// section never goes empty, the most recent plays.
+function recently_enjoyed(log: PlayLog): Song[] {
+	const week = tally(log, Date.now() - ENJOYED_DAYS * DAY_MS);
+	let picked = repeated(week);
+	if (!picked.length) picked = repeated(tally(log, 0));
+	if (!picked.length) picked = tally(log, 0).sort((a, b) => b.last - a.last);
+	return picked.slice(0, ENJOYED).flatMap(({ track, count, last }) => {
+		const song = to_song(track);
+		return song ? [{ ...song, played: new Date(last).toISOString(), plays: count }] : [];
+	});
 }
 
 const top_of = (lib: Library, period: Period): Top => ({
