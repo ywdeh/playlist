@@ -12,6 +12,7 @@
     "build": "vite build",
     "preview": "npm run build && wrangler dev",
     "deploy": "npm run build && wrangler deploy",
+    "deploy:cron": "wrangler deploy --config cron/wrangler.jsonc",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
   },
   "devDependencies": {

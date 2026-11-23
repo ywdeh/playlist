@@ -68,6 +68,13 @@ async function read_kept<T>(key: string): Promise<Kept<T> | null> {
 	return found ?? (hit as Kept<T> | undefined) ?? null;
 }
 
+export async function peek<T>(key: string): Promise<T | null> {
+	const store = kv();
+	if (!store) return (kept.get(key)?.value as T | undefined) ?? null;
+	const found = (await store.get(`stored:${key}`, 'json')) as Kept<T> | null;
+	return found?.value ?? null;
+}
+
 async function refresh<T>(key: string, load: () => Promise<T>): Promise<T> {
 	tried.set(key, Date.now());
 	try {

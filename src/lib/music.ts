@@ -1,6 +1,8 @@
 export const PERIODS = ['short_term', 'medium_term', 'long_term'] as const;
 export type Period = (typeof PERIODS)[number];
 
+export const DEFAULT_PERIOD: Period = 'medium_term';
+
 export const PERIOD_LABELS: Record<Period, string> = {
 	short_term: 'month',
 	medium_term: '6 months',
@@ -20,6 +22,7 @@ export interface Song {
 	artist_spotify?: string;
 	isrc?: string;
 	played?: string;
+	plays?: number;
 }
 
 export interface Live extends Song {

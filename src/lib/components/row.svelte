@@ -61,7 +61,14 @@
 			{#if active && player.playing}
 				<Eq size={16} label="Playing" />
 			{:else}
-				<span>{end}</span>
+				{#if song.plays}
+					<span class="stack">
+						<span class="count">{song.plays} {song.plays === 1 ? 'time' : 'times'}</span>
+						<span>{end}</span>
+					</span>
+				{:else}
+					<span>{end}</span>
+				{/if}
 			{/if}
 		</span>
 	</button>
@@ -151,6 +158,15 @@
 		font-size: var(--fs-sm);
 		font-variant-numeric: tabular-nums;
 		white-space: nowrap;
+	}
+	.stack {
+		display: grid;
+		justify-items: end;
+		gap: var(--gap-2xs);
+	}
+	.count {
+		color: var(--text);
+		font-weight: var(--fw-strong);
 	}
 	.end :global(.eq) {
 		margin-right: var(--gap-xs);

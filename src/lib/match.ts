@@ -9,7 +9,7 @@ export const norm = (s: string) =>
 		.replace(/[̀-ͯ]/g, '')
 		.toLowerCase()
 		.replace(/\(.*?\)|\[.*?\]|- .*(remaster|version|edit|mix).*$/g, '')
-		.replace(/[^a-z0-9]+/g, ' ')
+		.replace(/[^\p{L}\p{N}]+/gu, ' ')
 		.trim();
 
 export const song_key = (s: Named) => `${norm(s.artist)}:${norm(s.name)}`;

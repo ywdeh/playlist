@@ -1,10 +1,10 @@
 import { error, isHttpError } from '@sveltejs/kit';
 import { SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REFRESH_TOKEN } from '$app/env/private';
-import { PERIODS, type Artist, type ArtistData, type Live, type LiveData, type Period, type Playlist, type Song, type Top } from '#lib/music';
+import { DEFAULT_PERIOD, PERIODS, type Artist, type ArtistData, type Live, type LiveData, type Period, type Playlist, type Song, type Top } from '#lib/music';
 import { norm, same_artist, song_key } from '#lib/match';
 import { FAVOURITE_PLAYLIST } from '#lib/site';
 import { artist_songs } from './previews';
-import { Loading, remember, shared_get, shared_put, stored } from './cache';
+import { Loading, peek, remember, shared_get, shared_put, stored } from './cache';
 
 const API = 'https://api.spotify.com/v1';
 const ACCOUNTS = 'https://accounts.spotify.com';
@@ -19,7 +19,13 @@ const COOL_MAX_S = 86400;
 const COOL_READ_MS = 60_000;
 const TOP_SONGS = 25;
 const TOP_ARTISTS = 8;
-const ENJOYED = 12;
+const ENJOYED = 16;
+const ENJOYED_DAYS = 7;
+const ENJOYED_MIN_PLAYS = 2;
+const PLAYS_KEY = 'plays1';
+const PLAYS_EVERY_S = 1500;
+const PLAYS_KEEP_DAYS = 30;
+const DAY_MS = 86_400_000;
 
 export class SpotifyError extends Error {
 	constructor(
@@ -181,27 +187,53 @@ function all_tracks(lib: Library): Track[] {
 
 const all_artists = (lib: Library) => PERIODS.flatMap((p) => lib.top[p].artists);
 
-function recently_enjoyed(lib: Library): Song[] {
-	const ranks = new Map(lib.top.short_term.tracks.map((t, i) => [t.id, i]));
-	const liked = new Set(lib.saved.map((t) => t.id));
-	const plays = new Map<string, { track: Track; count: number; last: string }>();
-	for (const { track, played_at } of lib.recent) {
-		const seen = plays.get(track.id);
-		if (seen) seen.count++;
-		else plays.set(track.id, { track, count: 1, last: played_at });
+// Spotify only ever returns the last 50 plays, so we keep our own log and merge into it on every sync.
+interface PlayLog {
+	plays: [id: string, at: number][];
+	tracks: Record<string, Track>;
+}
+
+async function log_plays(): Promise<PlayLog> {
+	const [prev, recent] = await Promise.all([peek<PlayLog>(PLAYS_KEY), items('/me/player/recently-played?limit=50')]);
+	const tracks = { ...prev?.tracks };
+	const plays = [...(prev?.plays ?? [])];
+	const seen = new Set(plays.map(([id, at]) => `${id}@${at}`));
+	for (const x of recent) {
+		const at = Date.parse(x?.played_at);
+		if (!x?.track?.id || !at || seen.has(`${x.track.id}@${at}`)) continue;
+		seen.add(`${x.track.id}@${at}`);
+		plays.push([x.track.id, at]);
+		tracks[x.track.id] = slim_track(x.track);
 	}
-	const score = ({ track, count }: { track: Track; count: number }) => {
-		const rank = ranks.get(track.id);
-		return count + (liked.has(track.id) ? 2 : 0) + (rank === undefined ? 0 : 2 - rank / TOP_SONGS);
-	};
-	return [...plays.values()]
-		.filter((p) => score(p) >= 2)
-		.sort((a, b) => score(b) - score(a))
+	const since = Date.now() - PLAYS_KEEP_DAYS * DAY_MS;
+	const kept = plays.filter(([, at]) => at >= since).sort((a, b) => a[1] - b[1]);
+	const used = new Set(kept.map(([id]) => id));
+	return { plays: kept, tracks: Object.fromEntries(Object.entries(tracks).filter(([id]) => used.has(id))) };
+}
+
+export const play_log = () => stored(PLAYS_KEY, PLAYS_EVERY_S, log_plays);
+
+function recently_enjoyed(log: PlayLog): Song[] {
+	const since = Date.now() - ENJOYED_DAYS * DAY_MS;
+	const counts = new Map<string, { track: Track; count: number; last: number }>();
+	for (const [id, at] of log.plays) {
+		const track = log.tracks[id];
+		if (!track || at < since) continue;
+		const key = song_key({ name: track.name, artist: track.artists[0]?.name ?? '' });
+		const seen = counts.get(key);
+		if (!seen) counts.set(key, { track, count: 1, last: at });
+		else {
+			seen.count++;
+			if (at > seen.last) Object.assign(seen, { track, last: at });
+		}
+	}
+	return [...counts.values()]
+		.filter((c) => c.count >= ENJOYED_MIN_PLAYS)
+		.sort((a, b) => b.count - a.count || b.last - a.last)
 		.slice(0, ENJOYED)
-		.sort((a, b) => b.last.localeCompare(a.last))
-		.flatMap(({ track, last }) => {
+		.flatMap(({ track, count, last }) => {
 			const song = to_song(track);
-			return song ? [{ ...song, played: last }] : [];
+			return song ? [{ ...song, played: new Date(last).toISOString(), plays: count }] : [];
 		});
 }
 
@@ -242,9 +274,9 @@ export async function load_playlist(): Promise<Playlist> {
 }
 
 async function pool(): Promise<Pool> {
-	const [lib, playlist] = await Promise.all([library(), favourites().catch(() => null)]);
+	const [lib, playlist, log] = await Promise.all([library(), favourites().catch(() => null), play_log().catch(() => null)]);
 	const seen = new Set<string>();
-	const tracks = [...all_tracks(lib), ...(playlist?.tracks ?? [])].filter((t) => !seen.has(t.id) && seen.add(t.id));
+	const tracks = [...all_tracks(lib), ...(playlist?.tracks ?? []), ...Object.values(log?.tracks ?? {})].filter((t) => !seen.has(t.id) && seen.add(t.id));
 	return { tracks, artists: all_artists(lib) };
 }
 const credited = (t: Track, artist: string) => t.artists.some((a) => norm(a.name) === norm(artist));
@@ -282,11 +314,16 @@ export const get_now_playing = () => remember('spotify:now', NOW_TTL_S, read_now
 
 export async function load_live(): Promise<LiveData> {
 	const now = get_now_playing().catch(() => null);
+	const log = play_log().catch((e) => {
+		report('play log', e);
+		return null;
+	});
 	try {
 		const lib = await library();
+		const plays = await log;
 		return {
-			...top_of(lib, 'short_term'),
-			enjoyed: recently_enjoyed(lib),
+			...top_of(lib, DEFAULT_PERIOD),
+			enjoyed: plays ? recently_enjoyed(plays) : [],
 			updated: new Date(lib.synced).toISOString(),
 			now: await now
 		};

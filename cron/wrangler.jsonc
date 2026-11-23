@@ -1,0 +1,9 @@
+{
+	"$schema": "../node_modules/wrangler/config-schema.json",
+	"name": "playlist-cron",
+	"main": "index.ts",
+	"compatibility_date": "2026-11-01",
+	"workers_dev": false,
+	"triggers": { "crons": ["*/30 * * * *"] },
+	"services": [{ "binding": "SITE", "service": "playlist" }]
+}
