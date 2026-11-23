@@ -181,7 +181,7 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: var(--gap-lg);
-		margin-bottom: var(--gap-2xl);
+		margin-bottom: var(--gap-xl);
 	}
 	.arrows {
 		display: none;
@@ -224,7 +224,7 @@
 		display: grid;
 		grid-auto-flow: column;
 		grid-auto-columns: clamp(150px, 22vw, 196px);
-		gap: var(--gap-2xl);
+		gap: var(--gap-xl);
 		overflow-x: auto;
 		overscroll-behavior-x: contain;
 		position: relative;

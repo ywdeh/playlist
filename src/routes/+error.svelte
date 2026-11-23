@@ -18,7 +18,7 @@
 	}
 	p {
 		color: var(--muted);
-		font-size: var(--fs-lg);
+		font-size: var(--fs-md);
 	}
 	.home {
 		margin-top: var(--gap-sm);

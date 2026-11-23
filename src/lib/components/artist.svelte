@@ -110,14 +110,14 @@
 	header {
 		display: grid;
 		justify-items: center;
-		gap: var(--gap-2xl);
-		margin: var(--gap-2xl) 0 var(--gap-sm);
+		gap: var(--gap-xl);
+		margin: var(--gap-xl) 0 var(--gap-sm);
 		text-align: center;
 	}
 	.identity {
 		display: grid;
 		justify-items: center;
-		gap: var(--gap-2xl);
+		gap: var(--gap-xl);
 	}
 	.photo {
 		width: clamp(180px, 40vw, 260px);
@@ -147,13 +147,13 @@
 		stroke-linejoin: round;
 	}
 	section {
-		margin-top: var(--gap-5xl);
+		margin-top: var(--gap-4xl);
 	}
 	section ~ section {
 		margin-top: var(--section-gap);
 	}
 	h2 {
-		margin: 0 0 var(--gap-2xl);
+		margin: 0 0 var(--gap-xl);
 	}
 	.list {
 		list-style: none;

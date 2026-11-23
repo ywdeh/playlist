@@ -34,11 +34,11 @@
 	main {
 		max-width: 1080px;
 		margin: 0 auto;
-		padding: var(--gap-4xl) var(--gutter) calc(2 * var(--gap-4xl));
+		padding: var(--gap-3xl) var(--gutter) calc(2 * var(--gap-3xl));
 	}
 	@media (max-width: 520px) {
 		main {
-			padding-top: var(--gap-3xl);
+			padding-top: var(--gap-2xl);
 		}
 	}
 	.edge {

@@ -122,7 +122,7 @@
 	}
 	.more {
 		position: relative;
-		margin-top: var(--gap-2xl);
+		margin-top: var(--gap-xl);
 	}
 	.label {
 		animation: swap var(--t-out) var(--ease);

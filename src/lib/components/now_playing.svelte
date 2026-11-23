@@ -101,7 +101,7 @@
 		grid-area: 1 / 1;
 		display: flex;
 		align-items: center;
-		gap: var(--gap-2xl);
+		gap: var(--gap-xl);
 		width: calc(100% + 2 * var(--inset));
 		margin: 0 calc(-1 * var(--inset));
 		padding: var(--inset);
@@ -128,13 +128,13 @@
 		display: inline-flex;
 		align-items: center;
 		gap: var(--gap-sm);
-		margin-bottom: var(--gap-2xs);
+		margin-bottom: var(--gap-xs);
 		font-size: var(--fs-sm);
 		font-weight: var(--fw-strong);
 		color: var(--accent);
 	}
 	.title {
-		font-size: var(--fs-xl);
+		font-size: var(--fs-lg);
 		font-weight: var(--fw-name);
 		letter-spacing: -0.02em;
 		line-height: 1.3;

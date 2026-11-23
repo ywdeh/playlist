@@ -7,7 +7,8 @@
 	import { PERIODS, PERIOD_LABELS, type LiveData, type Period, type Playlist, type Top } from '#lib/music';
 	import { player } from '#lib/player.svelte';
 	import { cover_url, page_tint, tint_on_hover } from '#lib/tint.svelte';
-	import { link } from '#lib/link';
+	import { link, out_link } from '#lib/link';
+	import { CONTACT } from '#lib/site';
 	import { artist_menu, artist_path, song_menu } from '#lib/menu.svelte';
 	import { reveal } from '#lib/reveal';
 	import { flip } from '#lib/flip.svelte';
@@ -73,7 +74,11 @@
 <div class="glow" aria-hidden="true"></div>
 
 <div class="title cascade" style:--i={0}>
-	<h1>{title}</h1>
+	<h1>
+		<span class="site press" aria-label="{title}, open {CONTACT.site.label}" {@attach out_link(CONTACT.site.href)}
+			>{title}<span class="tld_clip" aria-hidden="true"><span class="tld">.art</span></span></span
+		>
+	</h1>
 	<button type="button" class="updated tip_anchor" aria-label="About this page" aria-describedby="about_page">
 		<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /><path d="M12 11v5M12 8h.01" /></svg>
 		<span class="tip end wide below" role="tooltip" id="about_page">
@@ -181,18 +186,53 @@
 	h1 {
 		line-height: 1;
 	}
+	.site {
+		cursor: pointer;
+		--press-scale: 0.98;
+	}
+	/* .art slides out from behind the name: the clip box starts at the name's edge, so it's masked until it emerges */
+	.tld_clip {
+		display: inline-block;
+		overflow: clip;
+		overflow-clip-margin: 0.15em;
+		vertical-align: bottom;
+		padding-bottom: 0.1em;
+		margin-bottom: -0.1em;
+	}
+	.tld {
+		display: inline-block;
+		color: var(--muted);
+		opacity: 0;
+		filter: blur(6px);
+		translate: -100% 0;
+		transition:
+			opacity var(--t-move) var(--ease),
+			filter var(--t-move) var(--ease),
+			translate var(--t-move) var(--ease);
+	}
+	.site:focus-visible .tld {
+		opacity: var(--tone-off);
+		filter: blur(0);
+		translate: 0 0;
+	}
+	@media (hover: hover) {
+		.site:hover .tld {
+			opacity: var(--tone-off);
+			filter: blur(0);
+			translate: 0 0;
+		}
+	}
 	.intro {
 		max-width: 34em;
 		margin: calc(-1 * var(--gap-lg)) 0 clamp(44px, 7svh, 88px);
 		color: var(--muted);
-		font-size: var(--fs-lg);
+		font-size: var(--fs-md);
 		line-height: 1.6;
 		text-wrap: pretty;
 	}
 	@media (max-width: 520px) {
 		.intro {
 			margin: calc(-1 * var(--gap-md)) 0 clamp(32px, 5svh, 56px);
-			font-size: var(--fs-md);
 		}
 	}
 	.updated {
@@ -222,13 +262,13 @@
 		vector-effect: non-scaling-stroke;
 	}
 	h2 {
-		margin: 0 0 var(--gap-2xl);
+		margin: 0 0 var(--gap-xl);
 	}
 	.block {
 		margin-top: var(--section-gap);
 	}
 	.block.first {
-		margin-top: var(--gap-4xl);
+		margin-top: var(--gap-3xl);
 	}
 	.periods {
 		display: flex;
@@ -250,7 +290,7 @@
 			padding: 0 var(--gap-sm);
 		}
 		.title {
-			margin: clamp(8px, 6svh, 64px) 0 var(--gap-3xl);
+			margin: clamp(8px, 6svh, 64px) 0 var(--gap-2xl);
 		}
 	}
 	.list {
@@ -261,7 +301,7 @@
 		padding: 0;
 	}
 	.favourites {
-		margin-top: var(--gap-4xl);
+		margin-top: var(--gap-3xl);
 	}
 	.empty {
 		color: var(--muted);
@@ -283,7 +323,7 @@
 	}
 	.label {
 		font-weight: var(--fw-name);
-		font-size: var(--fs-lg);
+		font-size: var(--fs-md);
 		line-height: 26px;
 	}
 </style>

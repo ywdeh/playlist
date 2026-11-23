@@ -130,10 +130,10 @@
 		display: grid;
 		min-width: 0;
 		flex: 1.4 1 0;
-		gap: var(--gap-2xs);
+		gap: var(--gap-xs);
 	}
 	.name {
-		font-size: var(--fs-lg);
+		font-size: var(--fs-md);
 		font-weight: var(--fw-name);
 	}
 	.active .name {
@@ -162,7 +162,7 @@
 	.stack {
 		display: grid;
 		justify-items: end;
-		gap: var(--gap-2xs);
+		gap: var(--gap-xs);
 	}
 	.count {
 		color: var(--text);
@@ -184,9 +184,6 @@
 		.end {
 			width: auto;
 			min-width: 2.6em;
-		}
-		.name {
-			font-size: var(--fs-md);
 		}
 	}
 </style>

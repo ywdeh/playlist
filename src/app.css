@@ -54,16 +54,14 @@
 	--stroke: 2px;
 	--shadow: color-mix(in srgb, var(--bg) 85%, transparent);
 
-	--gap-2xs: 2px;
 	--gap-xs: 4px;
 	--gap-sm: 8px;
 	--gap-md: 12px;
 	--gap-lg: 16px;
-	--gap-xl: 20px;
-	--gap-2xl: 24px;
-	--gap-3xl: 32px;
-	--gap-4xl: 48px;
-	--gap-5xl: 64px;
+	--gap-xl: 24px;
+	--gap-2xl: 32px;
+	--gap-3xl: 48px;
+	--gap-4xl: 64px;
 	--inset: var(--gap-md);
 	--gutter: clamp(20px, 5vw, 48px);
 	--section-gap: clamp(104px, 12vw, 144px);
@@ -80,9 +78,8 @@
 
 	--fs-xs: 0.8rem;
 	--fs-sm: 0.9rem;
-	--fs-md: 1rem;
-	--fs-lg: 1.06rem;
-	--fs-xl: 1.5rem;
+	--fs-md: 1.06rem;
+	--fs-lg: 1.5rem;
 	--fs-display: clamp(2.6rem, 10vw, 3.8rem);
 	--fw-ui: 500;
 	--fw-strong: 600;
@@ -163,7 +160,7 @@ h1 {
 	line-height: 1.05;
 }
 h2 {
-	font-size: var(--fs-xl);
+	font-size: var(--fs-lg);
 	font-weight: var(--fw-heading);
 	letter-spacing: -0.02em;
 	line-height: 1.2;
@@ -173,7 +170,7 @@ h2 {
 	place-items: center;
 	flex: none;
 	height: var(--control-lg);
-	padding: 0 var(--gap-2xl);
+	padding: 0 var(--gap-xl);
 	border-radius: var(--r-pill);
 	--press-scale: 0.94;
 	background: var(--surface);

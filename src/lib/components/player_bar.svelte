@@ -373,7 +373,7 @@
 		grid-template-columns: minmax(0, 1fr) minmax(0, 480px) minmax(0, 1fr);
 		grid-template-areas: 'info controls tools' 'info seek volume';
 		align-items: center;
-		gap: var(--gap-2xs) var(--gap-3xl);
+		gap: var(--gap-xs) var(--gap-2xl);
 		max-width: calc(1080px - 2 * var(--gutter) + 2 * var(--inset));
 		margin: 0 auto;
 		padding: var(--gap-md) var(--gap-lg) var(--gap-md) var(--gap-md);
@@ -500,14 +500,14 @@
 	}
 	.text {
 		display: grid;
-		gap: var(--gap-2xs);
+		gap: var(--gap-xs);
 		min-width: 0;
 	}
 	.title {
 		justify-self: start;
 		max-width: 100%;
 		font-weight: var(--fw-name);
-		font-size: var(--fs-lg);
+		font-size: var(--fs-md);
 		line-height: 1.3;
 	}
 	.sub {
