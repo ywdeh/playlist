@@ -1,5 +1,3 @@
-// Tiny companion Worker: the SvelteKit Cloudflare adapter can't run scheduled jobs,
-// so this pings the site every 30 minutes to record new Spotify plays into the play log.
 interface Env {
 	SITE: { fetch(input: string): Promise<Response> };
 }

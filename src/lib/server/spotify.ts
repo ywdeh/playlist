@@ -11,7 +11,6 @@ const ACCOUNTS = 'https://accounts.spotify.com';
 
 export const OWNER_SCOPES = 'user-top-read user-read-recently-played user-read-currently-playing user-library-read';
 
-// Just under the cron's 30-minute interval, so every cron run finds the data stale and refreshes it.
 const SYNC_EVERY_S = 1500;
 const NOW_TTL_S = 4;
 const TOKEN_MARGIN_MS = 30_000;
@@ -21,6 +20,9 @@ const COOL_READ_MS = 60_000;
 const TOP_SONGS = 24;
 const TOP_ARTISTS = 8;
 const RECENT = 16;
+const MAX_PAGES = 30;
+const LIKED_EVERY_S = 86400 - SYNC_EVERY_S;
+const LIKED_KEY = 'liked2';
 const PLAYS_KEY = 'plays1';
 const PLAYS_KEEP_DAYS = 30;
 const DAY_MS = 86_400_000;
@@ -109,6 +111,19 @@ async function request(path: string, retry = true): Promise<any> {
 
 const items = async (path: string): Promise<any[]> => (await request(path))?.items ?? [];
 
+const next_path = (json: any): string | null => (typeof json?.next === 'string' && json.next.startsWith(API) ? json.next.slice(API.length) : null);
+
+async function rest_of(first: any): Promise<any[]> {
+	const out: any[] = [...(first?.items ?? [])];
+	let next = next_path(first);
+	for (let page = 1; next && page < MAX_PAGES; page++) {
+		const json = await request(next);
+		out.push(...(json?.items ?? []));
+		next = next_path(json);
+	}
+	return out;
+}
+
 type Image = { url: string; width?: number | null };
 
 function image(images: Image[] | undefined, min = 300) {
@@ -158,7 +173,6 @@ interface Library {
 	synced: number;
 	top: Record<Period, { tracks: Track[]; artists: RawArtist[] }>;
 	recent: { track: Track; played_at: string }[];
-	saved: Track[];
 }
 
 async function sync(): Promise<Library> {
@@ -171,21 +185,36 @@ async function sync(): Promise<Library> {
 	const recent = (await items('/me/player/recently-played?limit=50'))
 		.filter((x) => x?.track?.id)
 		.map((x) => ({ track: slim_track(x.track), played_at: x.played_at as string }));
-	const saved = (await items('/me/tracks?limit=50')).filter((x) => x?.track?.id).map((x) => slim_track(x.track));
-	return { synced: Date.now(), top, recent, saved };
+	return { synced: Date.now(), top, recent };
 }
 
 const library = () => stored('library2', SYNC_EVERY_S, sync);
 
-function all_tracks(lib: Library): Track[] {
+interface Liked {
+	total: number;
+	tracks: Track[];
+}
+
+const liked_tracks = (items: any[]) => items.filter((x) => x?.track?.id).map((x) => slim_track(x.track) as Track);
+
+async function read_liked(): Promise<Liked> {
+	const [prev, first] = await Promise.all([peek<Liked>(LIKED_KEY), request('/me/tracks?limit=50')]);
+	const total: number = first?.total ?? 0;
+	const page = liked_tracks(first?.items ?? []);
+	if (prev && prev.total === total && page.every((t, i) => prev.tracks[i]?.id === t.id)) return prev;
+	return { total, tracks: liked_tracks(await rest_of(first)) };
+}
+
+const liked_songs = async () => (await stored(LIKED_KEY, LIKED_EVERY_S, read_liked)).tracks;
+
+function all_tracks(lib: Library, liked: Track[]): Track[] {
 	const seen = new Set<string>();
-	const pool = [...PERIODS.flatMap((p) => lib.top[p].tracks), ...lib.recent.map((r) => r.track), ...lib.saved];
+	const pool = [...PERIODS.flatMap((p) => lib.top[p].tracks), ...lib.recent.map((r) => r.track), ...liked];
 	return pool.filter((t) => !seen.has(t.id) && seen.add(t.id));
 }
 
 const all_artists = (lib: Library) => PERIODS.flatMap((p) => lib.top[p].artists);
 
-// Spotify only ever returns the last 50 plays, so we keep our own log and merge into it on every sync.
 interface PlayLog {
 	plays: [id: string, at: number][];
 	tracks: Record<string, Track>;
@@ -211,13 +240,11 @@ async function log_plays(): Promise<PlayLog> {
 
 export const play_log = () => stored(PLAYS_KEY, SYNC_EVERY_S, log_plays);
 
-// Called by the cron every 30 minutes: starts a refresh of anything older than SYNC_EVERY_S.
 export async function sync_all() {
-	const [lib, log] = await Promise.all([library(), play_log(), favourites().catch(() => null)]);
+	const [lib, log] = await Promise.all([library(), play_log(), favourites().catch(() => null), liked_songs().catch(() => null)]);
 	return { library: new Date(lib.synced).toISOString(), plays: log.plays.length };
 }
 
-// The latest plays, newest first, each song once (at its latest play).
 function recently_listened(log: PlayLog): Song[] {
 	const seen = new Set<string>();
 	const out: Song[] = [];
@@ -231,10 +258,6 @@ function recently_listened(log: PlayLog): Song[] {
 	return out;
 }
 
-// Every play from the last LISTEN_DAYS days (plus one, to reach back to the viewer's midnight) as
-// [played at, track length]. The page splits them into days by the viewer's own clock, since the
-// server doesn't know their time zone. Track length is an estimate: Spotify only logs plays past
-// ~30s and doesn't say how much was heard.
 function listens(log: PlayLog): Listens {
 	const since = Date.now() - (LISTEN_DAYS + 1) * DAY_MS;
 	return {
@@ -252,6 +275,7 @@ const top_of = (lib: Library, period: Period): Top => ({
 interface Pool {
 	tracks: Track[];
 	artists: RawArtist[];
+	liked: Track[];
 }
 
 interface RawPlaylist {
@@ -280,10 +304,10 @@ export async function load_playlist(): Promise<Playlist> {
 }
 
 async function pool(): Promise<Pool> {
-	const [lib, playlist, log] = await Promise.all([library(), favourites().catch(() => null), play_log().catch(() => null)]);
+	const [lib, liked, playlist, log] = await Promise.all([library(), liked_songs(), favourites().catch(() => null), play_log().catch(() => null)]);
 	const seen = new Set<string>();
-	const tracks = [...all_tracks(lib), ...(playlist?.tracks ?? []), ...Object.values(log?.tracks ?? {})].filter((t) => !seen.has(t.id) && seen.add(t.id));
-	return { tracks, artists: all_artists(lib) };
+	const tracks = [...all_tracks(lib, liked), ...(playlist?.tracks ?? []), ...Object.values(log?.tracks ?? {})].filter((t) => !seen.has(t.id) && seen.add(t.id));
+	return { tracks, artists: all_artists(lib), liked };
 }
 const credited = (t: Track, artist: string) => t.artists.some((a) => norm(a.name) === norm(artist));
 
@@ -357,10 +381,7 @@ export async function load_artist(name: string): Promise<ArtistData> {
 	const found = find_artist(known, name);
 	if (!found) error(404, 'that artist isn’t in my music');
 	const artist = found.name;
-	// Only songs from the favourite playlist count as "mine"; other listening is left to the popular list.
-	const playlist = await favourites().catch(() => null);
-	const yours = songs((playlist?.tracks ?? []).filter((t) => credited(t, artist)));
-	// Any song I've played helps Deezer find the right artist, playlist or not.
+	const yours = songs(known.liked.filter((t) => credited(t, artist)));
 	const seeds = known.tracks.filter((t) => credited(t, artist)).slice(0, 3).map((t) => t.name);
 	const popular = await artist_songs(artist, seeds).catch(() => []);
 	const mine = new Set(yours.map(song_key));

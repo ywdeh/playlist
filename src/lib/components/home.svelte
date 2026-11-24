@@ -38,7 +38,6 @@
 	const backdrop = $derived(best ? cover_url(best.image, best.artist, best.name) : null);
 	page_tint(() => backdrop);
 
-	// Listening time per day by the viewer's clock, today first, skipping days before the log began.
 	const days = $derived.by(() => {
 		const listens = data.listens;
 		if (!listens) return [];

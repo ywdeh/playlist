@@ -6,7 +6,7 @@
 </script>
 
 <svelte:head>
-	<title>hedwy's playlist</title>
+	<title>hedwy's music</title>
 	<meta name="description" content={OWNER_INTRO.join(' ')} />
 </svelte:head>
 

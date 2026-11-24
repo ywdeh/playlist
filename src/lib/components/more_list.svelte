@@ -49,7 +49,6 @@
 		requestAnimationFrame(step);
 	}
 
-	// Step by `visible`, but don't leave a tiny last step (e.g. 24 → 25): a remainder under half a step joins this one.
 	function more() {
 		const next = shown + visible;
 		extra = total - next < visible / 2 ? total - visible : extra + visible;
