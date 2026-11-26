@@ -5,8 +5,9 @@
 		src,
 		artist,
 		name,
-		round = false
-	}: { src: string | null; artist?: string; name?: string; round?: boolean } = $props();
+		round = false,
+		hero
+	}: { src: string | null; artist?: string; name?: string; round?: boolean; hero?: string } = $props();
 
 	const url = $derived(
 		src ?? (artist ? `/api/art?${new URLSearchParams(name ? { artist, name } : { artist, v: '3' })}` : null)
@@ -26,7 +27,14 @@
 	}
 </script>
 
-<span class="art" class:round role="presentation" oncontextmenu={(e) => e.preventDefault()}>
+<span
+	class="art"
+	class:round
+	class:shimmer={url && !failed && !loaded}
+	data-hero={hero}
+	role="presentation"
+	oncontextmenu={(e) => e.preventDefault()}
+>
 	{#if url && !failed}
 		<img
 			src={url}
@@ -52,7 +60,7 @@
 		overflow: hidden;
 		--art-r: var(--r-sm);
 		border-radius: var(--art-r);
-		background: var(--surface-2);
+		background-color: var(--surface-2);
 		aspect-ratio: 1;
 	}
 	.round {

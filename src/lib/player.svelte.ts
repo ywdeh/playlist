@@ -5,10 +5,18 @@ import { playable } from './playable.svelte';
 export type Repeat = 'off' | 'one';
 const REPEATS: Repeat[] = ['off', 'one'];
 const MAX_SKIPS = 5;
+const MAX_QUEUE = 200;
 const DEFAULT_VOLUME = 0.4;
 
+/** how long two songs overlap when one hands over to the next */
+const FADE_S = 4;
+/** how early the next song starts loading, so the handover has no gap */
+const WARM_S = 12;
+/** intervals keep running in background tabs, where animation frames stop */
+const FADE_STEP_MS = 50;
+
 class Player {
-	queue = $state<QueueItem[]>([]);
+	queue = $state.raw<QueueItem[]>([]);
 	index = $state(-1);
 	track = $state<Preview | null>(null);
 	playing = $state(false);
@@ -18,8 +26,16 @@ class Player {
 	volume = $state(DEFAULT_VOLUME);
 	message = $state<string | null>(null);
 	repeat = $state<Repeat>('off');
+	shuffle = $state(false);
 
+	/** the active element: its events drive the player state */
 	#audio: HTMLAudioElement | null = null;
+	/** the other element, loading the next song or fading out the last one */
+	#spare: HTMLAudioElement | null = null;
+	#fading: HTMLAudioElement | null = null;
+	#fade: ReturnType<typeof setInterval> | undefined;
+	#warm: { key: string; found: Preview | null } | null = null;
+	#ordered: QueueItem[] = [];
 	#request = 0;
 	#retried = false;
 	#unmuted = DEFAULT_VOLUME;
@@ -33,22 +49,33 @@ class Player {
 		return !!c && song_key(c) === song_key(t);
 	}
 
-	#el() {
-		if (this.#audio) return this.#audio;
+	#make() {
 		const a = new Audio();
 		a.preload = 'auto';
-		a.volume = this.volume;
-		a.addEventListener('timeupdate', () => (this.time = a.currentTime));
-		a.addEventListener('durationchange', () => (this.duration = Number.isFinite(a.duration) ? a.duration : 30));
-		a.addEventListener('play', () => (this.playing = true));
-		a.addEventListener('pause', () => (this.playing = false));
-		a.addEventListener('ended', () => this.#ended());
-		a.addEventListener('error', () => {
-			if (a.getAttribute('src')) this.#audio_failed();
+		const live = () => a === this.#audio;
+		a.addEventListener('timeupdate', () => {
+			if (!live()) return;
+			this.time = a.currentTime;
+			this.#tick();
 		});
-		this.#audio = a;
-		this.#media_keys();
+		a.addEventListener('durationchange', () => {
+			if (live()) this.duration = Number.isFinite(a.duration) ? a.duration : 30;
+		});
+		a.addEventListener('play', () => live() && (this.playing = true));
+		a.addEventListener('pause', () => live() && (this.playing = false));
+		a.addEventListener('ended', () => live() && this.#ended());
+		a.addEventListener('error', () => {
+			if (live() && a.getAttribute('src')) this.#audio_failed();
+		});
 		return a;
+	}
+
+	#el() {
+		if (this.#audio) return this.#audio;
+		this.#audio = this.#make();
+		this.#audio.volume = this.volume;
+		this.#media_keys();
+		return this.#audio;
 	}
 
 	play(list: QueueItem[], start = 0) {
@@ -57,8 +84,27 @@ class Player {
 			this.toggle();
 			return;
 		}
-		this.queue = list.slice(0, 200);
-		void this.#load(start, 1);
+		this.#ordered = list.slice(0, MAX_QUEUE);
+		if (this.shuffle) {
+			this.queue = shuffled(this.#ordered, start);
+			void this.#load(0, 1);
+		} else {
+			this.queue = this.#ordered;
+			void this.#load(start, 1);
+		}
+	}
+
+	toggle_shuffle() {
+		this.shuffle = !this.shuffle;
+		if (!this.queue.length) return;
+		const at = this.#ordered.indexOf(this.current!);
+		if (this.shuffle) {
+			this.queue = shuffled(this.#ordered, at);
+			this.index = at < 0 ? -1 : 0;
+		} else {
+			this.queue = this.#ordered;
+			this.index = at;
+		}
 	}
 
 	async #preview(item: QueueItem, req: number): Promise<boolean | 'failed'> {
@@ -76,6 +122,7 @@ class Player {
 		this.duration = 30;
 		this.#retried = false;
 		const audio = this.#el();
+		audio.volume = this.volume;
 		audio.src = found.url;
 		try {
 			await audio.play();
@@ -92,6 +139,7 @@ class Player {
 			return;
 		}
 		const req = ++this.#request;
+		this.#end_fade();
 		this.index = i;
 		this.loading = true;
 		this.message = null;
@@ -112,6 +160,72 @@ class Player {
 			if (playable.state(this.queue[j]) !== 'no') return j;
 		}
 		return null;
+	}
+
+	/** near the end of a song: load the next one, then fade into it */
+	#tick() {
+		if (this.repeat !== 'off' || this.loading || this.#fading || !this.track || !this.playing) return;
+		const left = this.duration - this.time;
+		if (left > WARM_S || this.duration < FADE_S * 3) return;
+		const i = this.#next_playable(this.index, 1);
+		if (i === null) return;
+		const item = this.queue[i];
+		const key = song_key(item);
+		if (this.#warm?.key !== key) return this.#prepare(item, key);
+		if (left <= FADE_S && this.#warm.found) this.#crossfade(i, this.#warm.found);
+	}
+
+	#prepare(item: QueueItem, key: string) {
+		const warm: { key: string; found: Preview | null } = { key, found: null };
+		this.#warm = warm;
+		playable
+			.preview(item, true)
+			.then((found) => {
+				if (this.#warm !== warm || !found) return;
+				warm.found = found;
+				this.#spare ??= this.#make();
+				this.#spare.src = found.url;
+			})
+			.catch(() => {});
+	}
+
+	#crossfade(i: number, found: Preview) {
+		const from = this.#audio;
+		const to = this.#spare;
+		if (!from || !to) return;
+		this.#warm = null;
+		this.#request++;
+		this.#audio = to;
+		this.#spare = from;
+		this.#fading = from;
+		this.index = i;
+		this.track = found;
+		this.time = 0;
+		this.duration = Number.isFinite(to.duration) ? to.duration : 30;
+		this.message = null;
+		this.#retried = false;
+		to.volume = 0;
+		void to.play().catch(() => {});
+		this.#metadata();
+
+		const start = performance.now();
+		this.#fade = setInterval(() => {
+			const p = Math.min(1, (performance.now() - start) / (FADE_S * 1000));
+			to.volume = this.volume * Math.sin((p * Math.PI) / 2);
+			from.volume = this.volume * Math.cos((p * Math.PI) / 2);
+			if (p >= 1) this.#end_fade();
+		}, FADE_STEP_MS);
+	}
+
+	#end_fade() {
+		clearInterval(this.#fade);
+		const from = this.#fading;
+		this.#fading = null;
+		if (from) {
+			from.pause();
+			from.removeAttribute('src');
+		}
+		if (this.#audio) this.#audio.volume = this.volume;
 	}
 
 	#audio_failed() {
@@ -138,6 +252,7 @@ class Player {
 	toggle() {
 		const a = this.#audio;
 		if (!a || !this.track) return;
+		this.#end_fade();
 		if (a.paused) void a.play();
 		else a.pause();
 	}
@@ -185,14 +300,18 @@ class Player {
 		v = Math.max(0, Math.min(1, v));
 		if (v > 0) this.#unmuted = v;
 		this.volume = v;
-		if (this.#audio) this.#audio.volume = v;
+		if (this.#audio && !this.#fading) this.#audio.volume = v;
 	}
 
 	close() {
 		this.#request++;
+		this.#end_fade();
+		this.#warm = null;
 		this.#audio?.pause();
 		this.#audio?.removeAttribute('src');
+		this.#spare?.removeAttribute('src');
 		this.queue = [];
+		this.#ordered = [];
 		this.index = -1;
 		this.track = null;
 		this.playing = false;
@@ -218,6 +337,16 @@ class Player {
 			artwork: t.cover ? [{ src: t.cover, sizes: '500x500' }] : []
 		});
 	}
+}
+
+/** the song at `first` leads, the rest follow in random order */
+function shuffled<T>(list: T[], first: number): T[] {
+	const rest = list.filter((_, i) => i !== first);
+	for (let i = rest.length - 1; i > 0; i--) {
+		const j = Math.floor(Math.random() * (i + 1));
+		[rest[i], rest[j]] = [rest[j], rest[i]];
+	}
+	return list[first] ? [list[first], ...rest] : rest;
 }
 
 export const player = new Player();

@@ -15,6 +15,8 @@
 	import { ago, hours } from '#lib/format';
 	import { invalidateAll } from '$app/navigation';
 	import { clock, every, STATS_EVERY_MS } from '#lib/live.svelte';
+	import { catalog } from '#lib/catalog.svelte';
+	import SearchButton from './search_button.svelte';
 
 	let {
 		data,
@@ -33,6 +35,10 @@
 	const top = $derived<Top>(picked ?? data);
 	const ranked = $derived(top.tracks.filter((t) => !pinned_keys.has(song_key(t))));
 	const queue = $derived([...ranked, ...pinned]);
+
+	$effect.pre(() => {
+		catalog.add([...data.tracks, ...top.tracks, ...pinned, ...data.recent, ...(data.now ? [data.now] : [])], [...data.artists, ...top.artists]);
+	});
 
 	const best = $derived(top.tracks[0]);
 	const backdrop = $derived(best ? cover_url(best.image, best.artist, best.name) : null);
@@ -100,14 +106,17 @@
 			>{title}</span
 		>
 	</h1>
-	<button type="button" class="updated tip_anchor" aria-label="About this page" aria-describedby="about_page">
-		<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /><path d="M12 11v5M12 8h.01" /></svg>
-		<span class="tip end wide below" role="tooltip" id="about_page">
-			<strong>updated {ago(data.updated, clock.now)}</strong>
-			<span>straight from my spotify, with previews from deezer and itunes</span>
-			<span>if gets too outdated, my spotify subscription must've died. rip</span>
-		</span>
-	</button>
+	<div class="actions">
+		<SearchButton />
+		<button type="button" class="updated tip_anchor" aria-label="About this page" aria-describedby="about_page">
+			<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /><path d="M12 11v5M12 8h.01" /></svg>
+			<span class="tip end wide below" role="tooltip" id="about_page">
+				<strong>updated {ago(data.updated, clock.now)}</strong>
+				<span>straight from my spotify, with previews from deezer and itunes</span>
+				<span>if gets too outdated, my spotify subscription must've died. rip</span>
+			</span>
+		</button>
+	</div>
 </div>
 
 {#if intro.length}
@@ -130,7 +139,7 @@
 		{#if queue.length}
 			{#if ranked.length}
 				<MoreList total={ranked.length} order={13}>
-					<ol class="list" {@attach flip(() => ranked)}>
+					<ol class="list" class:stale={pending !== null} {@attach flip(() => ranked)}>
 						{#each ranked as t, i (t.artist + t.name)}
 							<Row song={t} rank={i + 1} order={4 + Math.min(i, 9)} onplay={() => player.play(queue, i)} />
 						{/each}
@@ -160,7 +169,7 @@
 					{@attach tint_on_hover(() => a.image ?? cover_url(null, a.name))}
 					{@attach artist_menu(() => ({ artist: a.name, spotify: a.spotify }))}
 				>
-					<Cover src={a.image} artist={a.name} round />
+					<Cover src={a.image} artist={a.name} round hero={a.name} />
 					<span class="label ellipsis">{a.name}</span>
 				</div>
 			{/each}
@@ -223,6 +232,10 @@
 	}
 	h1 {
 		line-height: 1;
+	}
+	.actions {
+		display: flex;
+		gap: var(--gap-xs);
 	}
 	.site {
 		cursor: pointer;
@@ -348,6 +361,13 @@
 	}
 	.favourites {
 		margin-top: var(--gap-3xl);
+	}
+	ol.list {
+		transition: opacity var(--t-out) var(--ease-ui);
+	}
+	ol.list.stale {
+		opacity: 0.45;
+		transition-delay: 0.15s;
 	}
 	.empty {
 		color: var(--muted);

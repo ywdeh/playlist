@@ -5,6 +5,6 @@
 	let { data } = $props();
 </script>
 
-<svelte:head><title>{data.artist}</title></svelte:head>
+<svelte:head><title>hedwy's music ({data.artist})</title></svelte:head>
 
 <Artist {data} back="/" who={OWNER_NAME} />

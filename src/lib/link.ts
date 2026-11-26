@@ -50,7 +50,7 @@ export function link(href: () => string) {
 			open(true);
 		};
 		const key = (e: KeyboardEvent) => {
-			if (e.key === 'Enter') open(e.ctrlKey || e.metaKey);
+			if (e.key === 'Enter' && !e.defaultPrevented) open(e.ctrlKey || e.metaKey);
 		};
 		const preload = () => preloadData(href()).catch(() => {});
 

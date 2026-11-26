@@ -104,6 +104,58 @@
 	background: var(--bg);
 	-webkit-font-smoothing: antialiased;
 	-webkit-tap-highlight-color: transparent;
+	-webkit-text-size-adjust: 100%;
+	text-size-adjust: 100%;
+	overscroll-behavior-y: none;
+}
+
+button,
+[role='link'],
+[role='slider'],
+[role='option'] {
+	touch-action: manipulation;
+	-webkit-touch-callout: none;
+}
+input {
+	user-select: text;
+	-webkit-user-select: text;
+}
+
+.shimmer {
+	background-color: var(--surface-2);
+	background-image: linear-gradient(100deg, transparent 30%, var(--wash) 50%, transparent 70%);
+	background-size: 200% 100%;
+	background-repeat: no-repeat;
+	animation: shimmer 1.6s var(--ease-ui) infinite;
+}
+@keyframes shimmer {
+	from {
+		background-position: 150% 0;
+	}
+	to {
+		background-position: -50% 0;
+	}
+}
+
+/* during a page transition the tint switches at once; the crossfade does the blending */
+html.morphing {
+	transition: none;
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+	animation-duration: var(--t-out);
+	animation-timing-function: var(--ease-ui);
+}
+::view-transition-group(hero) {
+	animation-duration: var(--t-move);
+	animation-timing-function: var(--ease);
+	border-radius: var(--r-pill);
+	overflow: hidden;
+}
+::view-transition-old(hero),
+::view-transition-new(hero) {
+	height: 100%;
+	animation-duration: var(--t-move);
 }
 
 * {
@@ -248,9 +300,10 @@ html.tinting .press {
 	animation: cascade_in var(--t-move) var(--ease) backwards;
 	animation-delay: calc(min(var(--i, 0), 16) * 40ms);
 }
+/* lifts a row so its tooltip clears its neighbours and the player bar, but stays under overlays */
 .cascade:has(.tip_anchor:hover, .tip_anchor:focus-within, .tip_anchor.tip_show) {
 	position: relative;
-	z-index: 99;
+	z-index: 25;
 }
 html:not(.ready) .cascade {
 	animation-play-state: paused;
@@ -291,6 +344,20 @@ html:not(.ready) .cascade {
 	transition:
 		opacity var(--t-out) var(--ease-ui),
 		translate var(--t-out) var(--ease-ui);
+}
+/* a keyboard shortcut named in a tooltip; touch screens have no keyboard, so it hides there */
+.tip kbd {
+	margin-left: var(--gap-xs);
+	padding: 0 6px;
+	border-radius: 6px;
+	background: var(--wash);
+	color: var(--muted);
+	font: inherit;
+}
+@media (pointer: coarse) {
+	.tip kbd {
+		display: none;
+	}
 }
 .tip.end {
 	left: auto;

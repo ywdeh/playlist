@@ -1,17 +1,43 @@
 <script lang="ts">
 	import '../app.css';
 	import font from '@fontsource-variable/outfit/files/outfit-latin-wght-normal.woff2?url';
+	import { navigating } from '$app/state';
 	import PlayerBar from '#lib/components/player_bar.svelte';
 	import ContextMenu from '#lib/components/context_menu.svelte';
+	import Search from '#lib/components/search.svelte';
+	import ArtistSkeleton from '#lib/components/artist_skeleton.svelte';
 	import Footer from '#lib/components/footer.svelte';
 	import { tint_root } from '#lib/tint.svelte';
 	import { tooltips } from '#lib/tooltip.svelte';
 	import { clip_fades } from '#lib/clip.svelte';
+	import { artist_of, find_hero, morph, page_transitions } from '#lib/page_transition';
+
+	/** fast loads swap straight to the page; slower ones show a placeholder first */
+	const PLACEHOLDER_AFTER_MS = 150;
 
 	let { children } = $props();
 	tint_root();
 	tooltips();
 	clip_fades();
+	page_transitions();
+
+	const going = $derived(navigating.to ? artist_of(navigating.to.url) : null);
+	let waiting = $state<{ artist: string; image: string | null } | null>(null);
+	const placeholder = $derived(going && waiting?.artist === going ? waiting : null);
+
+	$effect(() => {
+		const artist = going;
+		if (!artist) return void (waiting = null);
+		const timer = setTimeout(() => {
+			const image = find_hero(artist)?.querySelector('img')?.currentSrc || null;
+			void morph(artist, () => {
+				if (going !== artist) return;
+				waiting = { artist, image };
+				scrollTo(0, 0);
+			});
+		}, PLACEHOLDER_AFTER_MS);
+		return () => clearTimeout(timer);
+	});
 </script>
 
 <svelte:head>
@@ -19,12 +45,18 @@
 </svelte:head>
 
 <main>
-	{@render children()}
+	{#if placeholder}
+		<ArtistSkeleton artist={placeholder.artist} image={placeholder.image} />
+	{/if}
+	<div class="page" class:hidden={!!placeholder}>
+		{@render children()}
+	</div>
 	<Footer />
 </main>
 
 <PlayerBar />
 <ContextMenu />
+<Search />
 
 <div class="edge top" aria-hidden="true"></div>
 <div class="edge bottom" aria-hidden="true"></div>
@@ -34,12 +66,19 @@
 	main {
 		max-width: 1080px;
 		margin: 0 auto;
-		padding: var(--gap-3xl) var(--gutter) calc(2 * var(--gap-3xl));
+		padding: calc(var(--gap-3xl) + env(safe-area-inset-top)) max(var(--gutter), env(safe-area-inset-right))
+			calc(2 * var(--gap-3xl)) max(var(--gutter), env(safe-area-inset-left));
 	}
 	@media (max-width: 520px) {
 		main {
-			padding-top: var(--gap-2xl);
+			padding-top: calc(var(--gap-2xl) + env(safe-area-inset-top));
 		}
+	}
+	.page {
+		display: contents;
+	}
+	.page.hidden {
+		display: none;
 	}
 	.edge {
 		position: fixed;

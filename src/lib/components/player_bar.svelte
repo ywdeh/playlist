@@ -8,6 +8,9 @@
 	import { link } from '#lib/link';
 	import { artist_path, song_menu } from '#lib/menu.svelte';
 	import type { Repeat } from '#lib/player.svelte';
+	import { claimed, typing } from '#lib/keys';
+	import { search } from '#lib/catalog.svelte';
+	import { menu } from '#lib/menu.svelte';
 
 	const SPAN = 1200;
 	function ribbon(amp: number, waves: number, swells: number, thick: number, phase: number) {
@@ -224,11 +227,43 @@
 		e.preventDefault();
 		player.set_volume(player.volume + step);
 	}
+	const SEEK_STEP_S = 5;
+	const VOLUME_STEP = 0.1;
+
+	/** site-wide player keys; skipped while typing, in a menu or search, or when the focused control uses the key */
+	function shortcuts(e: KeyboardEvent) {
+		if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || typing(e) || claimed(e)) return;
+		if (search.open || menu.open || !player.current) return;
+		const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+		const act: Record<string, () => void> = e.shiftKey
+			? {
+					ArrowLeft: () => player.prev(),
+					ArrowRight: () => player.next(),
+					ArrowUp: () => player.set_volume(player.volume + VOLUME_STEP),
+					ArrowDown: () => player.set_volume(player.volume - VOLUME_STEP)
+				}
+			: {
+					' ': () => player.toggle(),
+					k: () => player.toggle(),
+					ArrowLeft: () => player.seek((player.time - SEEK_STEP_S) / player.duration),
+					ArrowRight: () => player.seek((player.time + SEEK_STEP_S) / player.duration),
+					m: () => player.toggle_mute(),
+					s: () => player.toggle_shuffle(),
+					r: () => player.cycle_repeat()
+				};
+		const run = act[key];
+		if (!run) return;
+		e.preventDefault();
+		run();
+	}
+
 	function seek_key(e: KeyboardEvent) {
 		if (e.key === 'ArrowRight') player.seek((player.time + 5) / player.duration);
 		if (e.key === 'ArrowLeft') player.seek((player.time - 5) / player.duration);
 	}
 </script>
+
+<svelte:window onkeydown={shortcuts} />
 
 {#if player.current || player.message}
 	<div class="dock">
@@ -264,10 +299,23 @@
 				</div>
 			</div>
 			<div class="controls">
-				<button class="icon press prev" onclick={() => player.prev()} aria-label="Previous" disabled={!player.current}>
+				<button
+					class="icon press prev tip_anchor"
+					onclick={() => player.prev()}
+					aria-label="Previous"
+					aria-keyshortcuts="Shift+ArrowLeft"
+					disabled={!player.current}
+				>
 					<svg viewBox="0 0 24 24"><path d="M7 7v10M11.2 12 17 7.9v8.2z" /></svg>
+					<span class="tip" role="tooltip">previous <kbd>⇧ ←</kbd></span>
 				</button>
-				<button class="icon main press" onclick={() => player.toggle()} aria-label={player.playing ? 'Pause' : 'Play'} disabled={!player.track}>
+				<button
+					class="icon main press tip_anchor"
+					onclick={() => player.toggle()}
+					aria-label={player.playing ? 'Pause' : 'Play'}
+					aria-keyshortcuts="Space"
+					disabled={!player.track}
+				>
 					{#if player.loading}
 						<span class="spin" aria-hidden="true"></span>
 					{:else if player.playing}
@@ -275,9 +323,17 @@
 					{:else}
 						<svg viewBox="0 0 24 24"><path d="M9 6.8v10.4l8.1-5.2z" /></svg>
 					{/if}
+					<span class="tip" role="tooltip">{player.playing ? 'pause' : 'play'} <kbd>space</kbd></span>
 				</button>
-				<button class="icon press" onclick={() => player.next()} aria-label="Next" disabled={!player.has_next}>
+				<button
+					class="icon press tip_anchor"
+					onclick={() => player.next()}
+					aria-label="Next"
+					aria-keyshortcuts="Shift+ArrowRight"
+					disabled={!player.has_next}
+				>
 					<svg viewBox="0 0 24 24"><path d="M17 7v10M7 7.9v8.2l5.8-4.1z" /></svg>
+					<span class="tip" role="tooltip">next <kbd>⇧ →</kbd></span>
 				</button>
 			</div>
 			<div class="seek">
@@ -306,22 +362,45 @@
 			<div class="tools">
 				<button
 					class="icon press side tip_anchor"
+					class:on={player.shuffle}
+					onclick={() => player.toggle_shuffle()}
+					aria-label={player.shuffle ? 'shuffling' : 'shuffle'}
+					aria-pressed={player.shuffle}
+					aria-keyshortcuts="S"
+				>
+					<svg viewBox="0 0 24 24" aria-hidden="true">
+						<path
+							class="line"
+							d="M4 7h2.5c2.2 0 3.4 1 4.6 3l1.8 4c1.2 2 2.4 3 4.6 3H20m-3-3 3 3-3 3M4 17h2.5c1.3 0 2.2-.4 3-1.1M20 7h-2.5c-1.3 0-2.2.4-3 1.1M17 4l3 3-3 3"
+						/>
+					</svg>
+					<span class="tip" role="tooltip">{player.shuffle ? 'shuffling' : 'shuffle'} <kbd>S</kbd></span>
+				</button>
+				<button
+					class="icon press side tip_anchor repeat"
 					class:on={player.repeat !== 'off'}
 					onclick={() => player.cycle_repeat()}
 					aria-label={REPEAT_LABEL[player.repeat]}
 					aria-pressed={player.repeat !== 'off'}
+					aria-keyshortcuts="R"
 				>
 					<svg viewBox="0 0 24 24" aria-hidden="true">
 						<path class="line" d="M4 11V9.5A3.5 3.5 0 0 1 7.5 6H18m-3-3 3 3-3 3M20 13v1.5a3.5 3.5 0 0 1-3.5 3.5H6m3 3-3-3 3-3" />
 					</svg>
-					<span class="tip" role="tooltip">{REPEAT_LABEL[player.repeat]}</span>
+					<span class="tip" role="tooltip">{REPEAT_LABEL[player.repeat]} <kbd>R</kbd></span>
 				</button>
 				<button class="icon press side close" onclick={() => player.close()} aria-label="Close player">
 					<svg viewBox="0 0 24 24" aria-hidden="true"><path class="line" d="M7 7l10 10M17 7 7 17" /></svg>
 				</button>
 			</div>
 			<div class="volume">
-				<button class="icon press side speaker" onclick={() => player.toggle_mute()} aria-label={player.volume ? 'Mute' : 'Unmute'}>
+				<button
+					class="icon press side speaker tip_anchor"
+					onclick={() => player.toggle_mute()}
+					aria-label={player.volume ? 'Mute' : 'Unmute'}
+					aria-keyshortcuts="M"
+				>
+					<span class="tip" role="tooltip">{player.volume ? 'mute' : 'unmute'} <kbd>M</kbd></span>
 					<svg viewBox="0 0 24 24" aria-hidden="true">
 						<path class="body" d="M5 10h2l4-3v10l-4-3H5z" />
 						{#if player.volume === 0}
@@ -364,7 +443,8 @@
 		right: 0;
 		bottom: 0;
 		z-index: 20;
-		padding: 0 var(--gap-md) max(var(--gap-md), env(safe-area-inset-bottom));
+		padding: 0 max(var(--gap-md), env(safe-area-inset-right)) max(var(--gap-md), env(safe-area-inset-bottom))
+			max(var(--gap-md), env(safe-area-inset-left));
 		pointer-events: none;
 	}
 	.player {
@@ -383,6 +463,9 @@
 		background: color-mix(in srgb, var(--surface) 92%, transparent);
 		backdrop-filter: blur(24px);
 		box-shadow: 0 18px 50px var(--shadow);
+		/* stays still while pages crossfade. It sits here and not on .dock: a named
+		   ancestor would stop the blur from seeing the page behind */
+		view-transition-name: player;
 	}
 	.spacer {
 		height: 120px;
@@ -755,7 +838,8 @@
 			gap: var(--gap-xs);
 		}
 		.close,
-		.prev {
+		.prev,
+		.repeat {
 			display: none;
 		}
 	}
