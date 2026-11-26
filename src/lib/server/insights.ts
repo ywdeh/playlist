@@ -19,7 +19,7 @@ const MIN_MATCHES = 2;
 
 const MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 /** bump when the prompt changes, so every paragraph is written again */
-const SUMMARY_KEY = (p: Period) => `summary2:${p}`;
+const SUMMARY_KEY = (p: Period) => `summary3:${p}`;
 const SUMMARY_LOCK = (p: Period) => `lock:summary:${p}`;
 const SONGS_FOR_AI = 25;
 /** once written, a paragraph stays at least this long even if the top songs shift */
@@ -126,6 +126,7 @@ const STYLE = `you write a short note for the top of my personal music page, in 
 - gentle wording. no blunt words like "breakup", "things ending" or "depression".
 - no song titles or artist names, no genres lists, no emojis, no quotes, no exclamation marks, no clichés like "soundtrack of my life" or "rollercoaster".
 - only describe what the songs and hints support. if unsure, stay general rather than invent.
+- don't open with "i've been listening to"; get to the feeling straight away.
 - reply with the note only.`;
 
 function hints(entry: SongEntry | undefined): string {
@@ -140,12 +141,28 @@ function hints(entry: SongEntry | undefined): string {
 		.join(', ');
 }
 
-function prompt(period: Period, tracks: Track[], songs: Songs) {
+/**
+ * The songs for one time range, marked with what sets the range apart:
+ * for the shorter ranges, songs that aren't among the year's favourites; for the year, the ones still played lately.
+ */
+function prompt(period: Period, tops: Record<Period, Track[]>, songs: Songs, others: string[]) {
+	const tracks = tops[period].slice(0, SONGS_FOR_AI);
+	const year = new Set(tops.long_term.map((t) => t.id));
+	const lately = new Set(tops.short_term.slice(0, SONGS_FOR_AI).map((t) => t.id));
+	const mark = (t: Track) =>
+		period === 'long_term' ? (lately.has(t.id) ? 'still on repeat lately' : '') : year.has(t.id) ? '' : `new, not one of my yearly favourites`;
 	const lines = tracks.map((t, i) => {
-		const hint = hints(songs[t.id]);
-		return `${i + 1}. ${t.name} by ${t.artists.map((a) => a.name).join(', ')}${hint ? ` (lyrics lean toward: ${hint})` : ''}`;
+		const notes = [hints(songs[t.id]) && `lyrics lean toward ${hints(songs[t.id])}`, mark(t)].filter(Boolean).join('; ');
+		return `${i + 1}. ${t.name} by ${t.artists.map((a) => a.name).join(', ')}${notes ? ` (${notes})` : ''}`;
 	});
-	return `my most played songs of ${WHEN[period].range}, most played first:\n${lines.join('\n')}\n\nstart the note with "${WHEN[period].start}".`;
+	const focus =
+		period === 'long_term'
+			? 'this note is about the whole year: what has stayed with me the longest.'
+			: `this note is about ${WHEN[period].range} only: focus on what's different from the rest of my year, especially the songs marked new.`;
+	const avoid = others.length
+		? `\n\nnotes already written for my other time ranges, so say something clearly different and don't reuse their words:\n${others.map((o) => `- ${o}`).join('\n')}`
+		: '';
+	return `my most played songs of ${WHEN[period].range}, most played first:\n${lines.join('\n')}\n\n${focus}${avoid}\n\nstart the note with "${WHEN[period].start}".`;
 }
 
 /** the paragraph ends without a full stop, like the rest of the site's text */
@@ -165,19 +182,23 @@ function tidy(raw: string | undefined): string | null {
 
 const top_set = (tracks: Track[]) => tracks.map((t) => t.id).sort().join(',');
 
-async function write_summary(period: Period, tracks: Track[], songs: Songs) {
+async function write_summary(period: Period, tops: Record<Period, Track[]>, songs: Songs) {
 	if (!env.AI || (await shared_get(SUMMARY_LOCK(period)))) return;
 	shared_put(SUMMARY_LOCK(period), '1', 60);
 	try {
+		const others = (await Promise.all(PERIODS.filter((p) => p !== period).map((p) => peek<Summary>(SUMMARY_KEY(p)))))
+			.map((s) => s?.text)
+			.filter((t): t is string => !!t);
 		const out = await env.AI.run(MODEL, {
 			messages: [
 				{ role: 'system', content: STYLE },
-				{ role: 'user', content: prompt(period, tracks, songs) }
+				{ role: 'user', content: prompt(period, tops, songs, others) }
 			],
 			max_tokens: 120,
-			temperature: 0.6
+			temperature: 0.8
 		});
 		const text = tidy(out?.response);
+		const tracks = tops[period].slice(0, SONGS_FOR_AI);
 		if (text) await save<Summary>(SUMMARY_KEY(period), { at: Date.now(), songs: top_set(tracks), text });
 	} finally {
 		await shared_drop(SUMMARY_LOCK(period));
@@ -200,7 +221,7 @@ export async function load_insights(period: Period): Promise<Insights> {
 	const lyrics_read = tracks.every((t) => !due(songs[t.id]));
 	const changed = !summary || (summary.songs !== top_set(tracks) && Date.now() - summary.at > REWRITE_AFTER_MS);
 	if (lyrics_read && changed && tracks.length)
-		waitUntil(write_summary(period, tracks, songs).catch((e) => console.error(`writing ${period} insight:`, e instanceof Error ? e.message : e)));
+		waitUntil(write_summary(period, tops, songs).catch((e) => console.error(`writing ${period} insight:`, e instanceof Error ? e.message : e)));
 
 	return { period, ready: !!summary, text: summary ? no_end_dot(summary.text) : null };
 }

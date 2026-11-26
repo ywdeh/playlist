@@ -121,9 +121,10 @@
 </div>
 
 {#if intro.length}
-	<p class="intro cascade" style:--i={0.5}>
-		{#each intro as line, i (i)}{#if i}<br />{/if}{line}{/each}
-	</p>
+	<div class="intro cascade" style:--i={0.5}>
+		<p>{#each intro as line, i (i)}{#if i}<br />{/if}{line}{/each}</p>
+		<Insights period={top.period} />
+	</div>
 {/if}
 
 <div class="cascade" style:--i={1}><NowPlaying initial={data.now} /></div>
@@ -133,8 +134,6 @@
 		<button class="pill press" aria-pressed={shown === p} onclick={() => pick(p)}>{PERIOD_LABELS[p]}</button>
 	{/each}
 </nav>
-
-<Insights period={top.period} order={2.5} />
 
 {#key top.period}
 	<section class="block first" {@attach reveal}>
@@ -245,6 +244,8 @@
 		--press-scale: 0.98;
 	}
 	.intro {
+		display: grid;
+		gap: var(--gap-lg);
 		max-width: 34em;
 		margin: calc(-1 * var(--gap-lg)) 0 clamp(44px, 7svh, 88px);
 		color: var(--muted);

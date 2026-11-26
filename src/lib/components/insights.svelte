@@ -5,7 +5,7 @@
 	const RETRY_MS = 30_000;
 	const TRIES = 6;
 
-	let { period, order = 0 }: { period: Period; order?: number } = $props();
+	let { period }: { period: Period } = $props();
 
 	const loaded = new Map<Period, string>();
 	let text = $state<string | null>(null);
@@ -14,6 +14,8 @@
 		const p = period;
 		const hit = loaded.get(p);
 		if (hit) return void (text = hit);
+		// another time range's words must never stand in for this one's
+		text = null;
 		let gone = false;
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		let tries = 0;
@@ -39,12 +41,12 @@
 
 {#if text}
 	{#key text}
-		<p class="insight cascade" style:--i={order}>
+		<p class="insight">
 			{text}
-			<span class="tag tip_anchor" tabindex="0" aria-describedby="insight_ai"
+			<button type="button" class="tag tip_anchor" aria-describedby="insight_ai"
 				>(ai summarized)<span class="tip wide" role="tooltip" id="insight_ai"
 					>summarized by ai from my top songs and what their lyrics are about</span
-				></span
+				></button
 			>
 		</p>
 	{/key}
@@ -52,12 +54,7 @@
 
 <style>
 	.insight {
-		max-width: 34em;
-		margin-top: var(--gap-2xl);
-		color: var(--muted);
-		font-size: var(--fs-md);
-		line-height: 1.6;
-		text-wrap: pretty;
+		animation: swap_in var(--t-out) var(--ease);
 	}
 	.tag {
 		margin-left: 0.25em;
@@ -65,4 +62,5 @@
 		color: color-mix(in srgb, var(--muted) 70%, transparent);
 		white-space: nowrap;
 		cursor: default;
-	}</style>
+	}
+</style>

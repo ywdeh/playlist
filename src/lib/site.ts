@@ -1,8 +1,7 @@
 export const OWNER_NAME = 'hedwy';
 
 export const OWNER_INTRO = [
-	"music is an undeniable part of my life, and one of the most intimate things i can share. this little hub automatically collects whatever i'm into.",
-	"maybe you'll find something here for yourself?"
+	"music is an undeniable part of my life, and one of the most intimate things i can share. this little hub automatically collects whatever i'm into."
 ];
 
 export const CONTACT = {
