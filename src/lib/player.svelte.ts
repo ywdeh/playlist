@@ -8,12 +8,8 @@ const MAX_SKIPS = 5;
 const MAX_QUEUE = 200;
 const DEFAULT_VOLUME = 0.4;
 
-/** how long two songs overlap when one hands over to the next */
-const FADE_S = 4;
 /** how early the next song starts loading, so the handover has no gap */
 const WARM_S = 12;
-/** intervals keep running in background tabs, where animation frames stop */
-const FADE_STEP_MS = 50;
 
 class Player {
 	queue = $state.raw<QueueItem[]>([]);
@@ -30,10 +26,8 @@ class Player {
 
 	/** the active element: its events drive the player state */
 	#audio: HTMLAudioElement | null = null;
-	/** the other element, loading the next song or fading out the last one */
+	/** the other element, loading the next song */
 	#spare: HTMLAudioElement | null = null;
-	#fading: HTMLAudioElement | null = null;
-	#fade: ReturnType<typeof setInterval> | undefined;
 	#warm: { key: string; found: Preview | null } | null = null;
 	#ordered: QueueItem[] = [];
 	#request = 0;
@@ -139,7 +133,6 @@ class Player {
 			return;
 		}
 		const req = ++this.#request;
-		this.#end_fade();
 		this.index = i;
 		this.loading = true;
 		this.message = null;
@@ -162,17 +155,39 @@ class Player {
 		return null;
 	}
 
-	/** near the end of a song: load the next one, then fade into it */
+	/** near the end of a song: load the next one, so it can start the moment this one ends */
 	#tick() {
-		if (this.repeat !== 'off' || this.loading || this.#fading || !this.track || !this.playing) return;
+		if (this.repeat !== 'off' || this.loading || !this.track || !this.playing) return;
 		const left = this.duration - this.time;
-		if (left > WARM_S || this.duration < FADE_S * 3) return;
+		if (left > WARM_S) return;
 		const i = this.#next_playable(this.index, 1);
 		if (i === null) return;
 		const item = this.queue[i];
 		const key = song_key(item);
-		if (this.#warm?.key !== key) return this.#prepare(item, key);
-		if (left <= FADE_S && this.#warm.found) this.#crossfade(i, this.#warm.found);
+		if (this.#warm?.key !== key) this.#prepare(item, key);
+	}
+
+	/** a song played to its end: start the next one, already loaded if it could be */
+	#hand_over() {
+		const i = this.#next_playable(this.index, 1);
+		const found = i !== null && this.#warm?.key === song_key(this.queue[i]) ? this.#warm.found : null;
+		const from = this.#audio;
+		const to = this.#spare;
+		if (i === null || !found || !from || !to) return this.next();
+		this.#warm = null;
+		this.#request++;
+		this.#audio = to;
+		this.#spare = from;
+		this.index = i;
+		this.track = found;
+		this.time = 0;
+		this.duration = Number.isFinite(to.duration) ? to.duration : 30;
+		this.message = null;
+		this.#retried = false;
+		to.volume = this.volume;
+		void to.play().catch(() => {});
+		this.#metadata();
+		from.removeAttribute('src');
 	}
 
 	#prepare(item: QueueItem, key: string) {
@@ -187,45 +202,6 @@ class Player {
 				this.#spare.src = found.url;
 			})
 			.catch(() => {});
-	}
-
-	#crossfade(i: number, found: Preview) {
-		const from = this.#audio;
-		const to = this.#spare;
-		if (!from || !to) return;
-		this.#warm = null;
-		this.#request++;
-		this.#audio = to;
-		this.#spare = from;
-		this.#fading = from;
-		this.index = i;
-		this.track = found;
-		this.time = 0;
-		this.duration = Number.isFinite(to.duration) ? to.duration : 30;
-		this.message = null;
-		this.#retried = false;
-		to.volume = 0;
-		void to.play().catch(() => {});
-		this.#metadata();
-
-		const start = performance.now();
-		this.#fade = setInterval(() => {
-			const p = Math.min(1, (performance.now() - start) / (FADE_S * 1000));
-			to.volume = this.volume * Math.sin((p * Math.PI) / 2);
-			from.volume = this.volume * Math.cos((p * Math.PI) / 2);
-			if (p >= 1) this.#end_fade();
-		}, FADE_STEP_MS);
-	}
-
-	#end_fade() {
-		clearInterval(this.#fade);
-		const from = this.#fading;
-		this.#fading = null;
-		if (from) {
-			from.pause();
-			from.removeAttribute('src');
-		}
-		if (this.#audio) this.#audio.volume = this.volume;
 	}
 
 	#audio_failed() {
@@ -252,7 +228,6 @@ class Player {
 	toggle() {
 		const a = this.#audio;
 		if (!a || !this.track) return;
-		this.#end_fade();
 		if (a.paused) void a.play();
 		else a.pause();
 	}
@@ -270,7 +245,7 @@ class Player {
 		if (this.repeat === 'one') {
 			this.seek(0);
 			void this.#audio?.play();
-		} else this.next();
+		} else this.#hand_over();
 	}
 
 	cycle_repeat() {
@@ -300,12 +275,11 @@ class Player {
 		v = Math.max(0, Math.min(1, v));
 		if (v > 0) this.#unmuted = v;
 		this.volume = v;
-		if (this.#audio && !this.#fading) this.#audio.volume = v;
+		if (this.#audio) this.#audio.volume = v;
 	}
 
 	close() {
 		this.#request++;
-		this.#end_fade();
 		this.#warm = null;
 		this.#audio?.pause();
 		this.#audio?.removeAttribute('src');

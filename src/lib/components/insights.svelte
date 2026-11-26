@@ -10,6 +10,9 @@
 	const PLACEHOLDER = 'getting the summary…';
 
 	let { period }: { period: Period } = $props();
+	// the page refreshes its data every few minutes and hands over a new object with the same range;
+	// going through a derived compares the value, so only a real change of range starts over
+	const range = $derived(period);
 
 	const loaded = new Map<Period, string>();
 	let phase = $state<'thinking' | 'ready' | 'none'>('thinking');
@@ -17,7 +20,7 @@
 	const words = $derived(text?.split(' ') ?? []);
 
 	$effect(() => {
-		const p = period;
+		const p = range;
 		let gone = false;
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		let tries = 0;
