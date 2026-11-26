@@ -146,7 +146,7 @@ const slim_track = (t: any) => ({
 	artists: (t.artists ?? []).map(slim_artist) as RawArtist[]
 });
 
-type Track = ReturnType<typeof slim_track>;
+export type Track = ReturnType<typeof slim_track>;
 type RawArtist = ReturnType<typeof slim_artist>;
 
 function to_song(t: any): Song | null {
@@ -189,6 +189,12 @@ async function sync(): Promise<Library> {
 }
 
 const library = () => stored('library2', SYNC_EVERY_S, sync);
+
+/** every top track for each time range, best first */
+export async function top_tracks(): Promise<Record<Period, Track[]>> {
+	const lib = await library();
+	return Object.fromEntries(PERIODS.map((p) => [p, lib.top[p].tracks])) as Record<Period, Track[]>;
+}
 
 interface Liked {
 	total: number;

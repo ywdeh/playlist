@@ -17,6 +17,7 @@
 	import { clock, every, STATS_EVERY_MS } from '#lib/live.svelte';
 	import { catalog } from '#lib/catalog.svelte';
 	import SearchButton from './search_button.svelte';
+	import Insights from './insights.svelte';
 
 	let {
 		data,
@@ -132,6 +133,8 @@
 		<button class="pill press" aria-pressed={shown === p} onclick={() => pick(p)}>{PERIOD_LABELS[p]}</button>
 	{/each}
 </nav>
+
+<Insights period={top.period} order={2.5} />
 
 {#key top.period}
 	<section class="block first" {@attach reveal}>

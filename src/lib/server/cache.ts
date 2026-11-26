@@ -54,6 +54,10 @@ export function shared_put(key: string, value: string, ttl_s: number) {
 	waitUntil(store.put(`shared:${key}`, value, { expirationTtl: Math.max(KV_MIN_TTL_S, Math.ceil(ttl_s)) }).catch(() => {}));
 }
 
+export async function shared_drop(key: string) {
+	await kv()?.delete(`shared:${key}`).catch(() => {});
+}
+
 export class Loading extends Error {}
 
 const kept = new Map<string, Kept<unknown> & { read: number }>();
@@ -73,6 +77,13 @@ export async function peek<T>(key: string): Promise<T | null> {
 	if (!store) return (kept.get(key)?.value as T | undefined) ?? null;
 	const found = (await store.get(`stored:${key}`, 'json')) as Kept<T> | null;
 	return found?.value ?? null;
+}
+
+/** writes a value straight to the store, in the same shape `stored` reads */
+export async function save<T>(key: string, value: T) {
+	const entry = { at: Date.now(), value };
+	kept.set(key, { ...entry, read: Date.now() });
+	await kv()?.put(`stored:${key}`, JSON.stringify(entry)).catch(() => {});
 }
 
 async function refresh<T>(key: string, load: () => Promise<T>): Promise<T> {

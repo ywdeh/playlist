@@ -64,6 +64,14 @@ export interface ArtistData {
 	popular: Song[];
 }
 
+export interface Insights {
+	period: Period;
+	/** false while too few lyrics have been read to say anything */
+	ready: boolean;
+	/** a sentence or two about what the top songs feel like */
+	text: string | null;
+}
+
 export interface Playlist {
 	name: string;
 	image: string | null;
