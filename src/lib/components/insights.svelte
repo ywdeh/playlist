@@ -5,9 +5,9 @@
 	/** while the paragraph is still being written, ask again this often; after the last try it's hidden */
 	const RETRY_MS = 3_000;
 	const TRIES = 15;
-	/** "summarizing…" stays at least this long, so it's read before the words take its place */
+	/** "getting the summary…" stays at least this long, so it's read before the words take its place */
 	const MIN_THINK_MS = 1_400;
-	const PLACEHOLDER = 'summarizing…';
+	const PLACEHOLDER = 'getting the summary…';
 
 	let { period }: { period: Period } = $props();
 
@@ -68,11 +68,16 @@
 			<p class="insight cascade" aria-live="polite">
 				<span class="sr">{phase === 'ready' ? text : PLACEHOLDER}</span>
 				{#if phase === 'ready'}
-					<!-- "summarizing…" leaves the way the words arrive, in the same spot as the first word, so it reads as being replaced -->
+					<!-- "getting the summary…" leaves the way the words arrive, in the same spot as the first word, so it reads as being replaced -->
 					<span class="leaving" aria-hidden="true">{PLACEHOLDER}</span>
 					<span aria-hidden="true">
 						{#each words as word, i (i)}{i ? ' ' : ''}<span class="word" style:--w={i}>{word}</span>{/each}
-					</span>				{:else}
+					</span>
+					<button type="button" class="tag tip_anchor word" style:--w={words.length} aria-describedby="insight_ai"
+						>(ai summarized)<span class="tip wide" role="tooltip" id="insight_ai"
+							>summarized by ai from my top songs and what their lyrics are about</span
+						></button
+					>				{:else}
 					<span class="thinking" aria-hidden="true">{PLACEHOLDER}</span>
 				{/if}
 			</p>
@@ -91,7 +96,7 @@
 	.insight {
 		position: relative;
 		margin-top: var(--gap-lg);
-		/* room for three lines from the start, so "summarizing…" and most summaries take the same space */
+		/* room for three lines from the start, so "getting the summary…" and most summaries take the same space */
 		min-height: 3lh;
 	}
 	/* the same shine as the loading placeholders (.shimmer in app.css), drawn on the letters:
@@ -137,6 +142,14 @@
 			opacity: 0;
 			filter: blur(6px);
 		}
+	}
+	.tag {
+		display: inline-block;
+		margin-left: 0.1em;
+		font-size: var(--fs-xs);
+		color: color-mix(in srgb, var(--muted) calc((1 - var(--tone-off)) * 100%), transparent);
+		white-space: nowrap;
+		cursor: default;
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.word {
