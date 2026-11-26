@@ -244,8 +244,6 @@
 		--press-scale: 0.98;
 	}
 	.intro {
-		display: grid;
-		gap: var(--gap-lg);
 		max-width: 34em;
 		margin: calc(-1 * var(--gap-lg)) 0 clamp(44px, 7svh, 88px);
 		color: var(--muted);

@@ -1,10 +1,11 @@
 <script lang="ts">
 	import type { Insights, Period } from '#lib/music';
+	import { fold } from '#lib/fold';
 
 	/** while the paragraph is still being written, ask again this often; after the last try it's hidden */
 	const RETRY_MS = 3_000;
 	const TRIES = 15;
-	/** "summarizing…" stays at least this long, so it reads as a moment rather than a flicker */
+	/** "summarizing…" stays at least this long, so it's read before the words take its place */
 	const MIN_THINK_MS = 1_400;
 	const PLACEHOLDER = 'summarizing…';
 
@@ -17,10 +18,10 @@
 
 	$effect(() => {
 		const p = period;
-		const started = Date.now();
 		let gone = false;
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		let tries = 0;
+		const since = performance.now();
 
 		// another time range's words must never stand in for this one's
 		text = null;
@@ -29,11 +30,10 @@
 		const show = (next: string) => {
 			timer = setTimeout(
 				() => {
-					if (gone) return;
 					text = next;
 					phase = 'ready';
 				},
-				Math.max(0, MIN_THINK_MS - (Date.now() - started))
+				Math.max(0, MIN_THINK_MS - (performance.now() - since))
 			);
 		};
 		const load = async () => {
@@ -62,30 +62,43 @@
 	});
 </script>
 
-{#if phase !== 'none'}
-	<p class="insight" aria-live="polite">
-		<span class="sr">{phase === 'ready' ? text : PLACEHOLDER}</span>
-		{#if phase === 'ready'}
-			<!-- "summarizing…" leaves the way the words arrive, in the same spot as the first word, so it reads as being replaced -->
-			<span class="leaving" aria-hidden="true">{PLACEHOLDER}</span>
-			<span aria-hidden="true">
-				{#each words as word, i (i)}{i ? ' ' : ''}<span class="word" style:--w={i}>{word}</span>{/each}
-			</span>
-			<button type="button" class="tag tip_anchor" style:--w={words.length} aria-describedby="insight_ai"
-				>(ai summarized)<span class="tip wide" role="tooltip" id="insight_ai"
-					>summarized by ai from my top songs and what their lyrics are about</span
-				></button
-			>
-		{:else}
-			<span class="thinking" aria-hidden="true">{PLACEHOLDER}</span>
+<div class="fold" {@attach fold}>
+	<div>
+		{#if phase !== 'none'}
+			<p class="insight cascade" aria-live="polite">
+				<span class="sr">{phase === 'ready' ? text : PLACEHOLDER}</span>
+				{#if phase === 'ready'}
+					<!-- "summarizing…" leaves the way the words arrive, in the same spot as the first word, so it reads as being replaced -->
+					<span class="leaving" aria-hidden="true">{PLACEHOLDER}</span>
+					<span aria-hidden="true">
+						{#each words as word, i (i)}{i ? ' ' : ''}<span class="word" style:--w={i}>{word}</span>{/each}
+					</span>
+					<button type="button" class="tag tip_anchor word" style:--w={words.length} aria-describedby="insight_ai"
+						>(ai summarized)<span class="tip wide" role="tooltip" id="insight_ai"
+							>summarized by ai from my top songs and what their lyrics are about</span
+						></button
+					>
+				{:else}
+					<span class="thinking" aria-hidden="true">{PLACEHOLDER}</span>
+				{/if}
+			</p>
 		{/if}
-	</p>
-{/if}
+	</div>
+</div>
 
 <style>
+	.fold {
+		transition: height var(--t-move) var(--ease);
+	}
+	/* keeps the paragraph's gap inside, so the gap folds in and out with it */
+	.fold > div {
+		display: flow-root;
+	}
 	.insight {
 		position: relative;
-		animation: swap_in var(--t-out) var(--ease);
+		margin-top: var(--gap-lg);
+		/* room for three lines from the start, so "summarizing…" and most summaries take the same space */
+		min-height: 3lh;
 	}
 	/* the same shine as the loading placeholders (.shimmer in app.css), drawn on the letters:
 	   white with the page's tint, which follows the cover art */
@@ -120,8 +133,7 @@
 			filter: blur(6px);
 		}
 	}
-	.word,
-	.tag {
+	.word {
 		display: inline-block;
 		animation: appear var(--t-reveal) var(--ease) backwards;
 		animation-delay: calc(var(--w) * 60ms);
@@ -133,6 +145,7 @@
 		}
 	}
 	.tag {
+		display: inline-block;
 		margin-left: 0.1em;
 		font-size: var(--fs-xs);
 		color: color-mix(in srgb, var(--muted) calc((1 - var(--tone-off)) * 100%), transparent);
@@ -140,8 +153,7 @@
 		cursor: default;
 	}
 	@media (prefers-reduced-motion: reduce) {
-		.word,
-		.tag {
+		.word {
 			animation-delay: 0ms;
 		}
 	}
