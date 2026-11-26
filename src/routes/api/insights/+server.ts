@@ -9,7 +9,8 @@ export const GET: RequestHandler = async ({ url, setHeaders }) => {
 	if (!is_period(period)) error(400, 'that time range doesn’t exist');
 	try {
 		const insights = await load_insights(period);
-		setHeaders({ 'cache-control': `public, max-age=${insights.ready ? 300 : 30}` });
+		// while it's still being written the page asks again every few seconds, so that answer mustn't be kept
+		setHeaders({ 'cache-control': insights.ready ? 'public, max-age=300' : 'no-store' });
 		return json(insights);
 	} catch (e) {
 		report('insights', e);
