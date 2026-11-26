@@ -72,13 +72,7 @@
 					<span class="leaving" aria-hidden="true">{PLACEHOLDER}</span>
 					<span aria-hidden="true">
 						{#each words as word, i (i)}{i ? ' ' : ''}<span class="word" style:--w={i}>{word}</span>{/each}
-					</span>
-					<button type="button" class="tag tip_anchor word" style:--w={words.length} aria-describedby="insight_ai"
-						>(ai summarized)<span class="tip wide" role="tooltip" id="insight_ai"
-							>summarized by ai from my top songs and what their lyrics are about</span
-						></button
-					>
-				{:else}
+					</span>				{:else}
 					<span class="thinking" aria-hidden="true">{PLACEHOLDER}</span>
 				{/if}
 			</p>
@@ -143,14 +137,6 @@
 			opacity: 0;
 			filter: blur(6px);
 		}
-	}
-	.tag {
-		display: inline-block;
-		margin-left: 0.1em;
-		font-size: var(--fs-xs);
-		color: color-mix(in srgb, var(--muted) calc((1 - var(--tone-off)) * 100%), transparent);
-		white-space: nowrap;
-		cursor: default;
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.word {
